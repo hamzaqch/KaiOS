@@ -1,10 +1,10 @@
 ---
-phase: climbing
-progress: 0/39
+phase: complete
+progress: 39/39
 task: "Build KaiOS: a full harness of the reference class for Copilot in VS Code"
 slug: kaios
 started: 2026-09-28T00:00:00Z
-updated: 2026-09-28T00:00:00Z
+updated: 2026-09-28T18:00:00Z
 stated_goal: "[held verbatim in the private task ISA; it names the reference system, which must not ship in this repo]"
 ---
 
@@ -46,77 +46,77 @@ Ship KaiOS v1.0.0 at `~/code/KaiOS`: doctrine, 25+ hooks, 25+ skills, 8+ agents 
 ### F0 · Cross-cutting
 Why: the constraints that make it installable at work and safe to share with a team.
 
-- [ ] ISC-1: `python -m unittest discover -s tests -t .` from the repo root passes with zero failures (stdlib runner; pytest is not assumed to exist at work). Falsifier: any failing test or zero tests discovered.
-- [ ] ISC-2: `tests/test_containment.py` greps the whole repo for every term in `tests/containment.txt` (personal names, home paths, the other system's name) and finds zero hits. Falsifier: one hit.
-- [ ] ISC-3: no `.py` file imports anything outside the standard library. Falsifier: `python -m kaios integrity imports` reports a non-stdlib import.
-- [ ] ISC-4: every `.ps1` parses under PowerShell 5.1 rules: `scripts/Test-PS51.ps1` runs the PS parser with 5.1-only tokens banned (`??`, `?:`, `&&`, `||` at statement level). Falsifier: parser error or banned token.
-- [ ] ISC-5: `git log` shows a commit per feature and the repo has no untracked build output at close. Falsifier: `git status --porcelain` non-empty.
+- [x] ISC-1: `python -m unittest discover -s tests -t .` from the repo root passes with zero failures (stdlib runner; pytest is not assumed to exist at work). Falsifier: any failing test or zero tests discovered. — evidence: unittest discover 367 OK (c525246)
+- [x] ISC-2: `tests/test_containment.py` greps the whole repo for every term in `tests/containment.txt` (personal names, home paths, the other system's name) and finds zero hits. Falsifier: one hit. — evidence: integrity containment + private list 0 hits (c525246)
+- [x] ISC-3: no `.py` file imports anything outside the standard library. Falsifier: `python -m kaios integrity imports` reports a non-stdlib import. — evidence: integrity imports ok (c525246)
+- [x] ISC-4: every `.ps1` parses under PowerShell 5.1 rules: `scripts/Test-PS51.ps1` runs the PS parser with 5.1-only tokens banned (`??`, `?:`, `&&`, `||` at statement level). Falsifier: parser error or banned token. — evidence: Test-PS51.ps1 exit 0 (c525246)
+- [x] ISC-5: `git log` shows a commit per feature and the repo has no untracked build output at close. Falsifier: `git status --porcelain` non-empty. — evidence: git status clean @ close (c525246)
 
 ### F1 · Doctrine
 Why: Copilot needs the constitution, the Algorithm, and the verification rules loaded on every session, rewritten fresh with no personal residue.
 
-- [ ] ISC-6: `.github/copilot-instructions.md` exists, under 12k chars, contains the response format, the five constitutional rules (output format, verification, analysis-read-only, security protocol, self-healing), the Algorithm pointer, and the routing table. Falsifier: grep for each rule heading fails.
-- [ ] ISC-7: `SYSTEM/ALGORITHM/LATEST` names a version whose file exists and states the run-complete claims (goal preserved, done written first, anti-claims, prerequisites probed, ambiguity resolved, evidence per claim, class sweep, ask fidelity, second look, trail, spend). Falsifier: any of those eleven ideas missing from the file.
-- [ ] ISC-8: `SYSTEM/RULES/Verification.md`, `SelfHealing.md`, `Philosophy.md` exist, each with freshness frontmatter and at least the rule names of their originals (modality fidelity, defer on unavailable verifier, appearance ≠ existence, reproduce before fixing, temporal fidelity, restore parity, cache fidelity; routing table for where a rule lives; intent engineering + ideal-state prompting). Falsifier: grep.
-- [ ] ISC-9: `SYSTEM/DOCUMENTATION/ISAFormat.md` defines the ISA sections, claim syntax, `(after:)` edges, anti-claims, fog, remaining work, and `kaios isa check` enforces it. Falsifier: a malformed ISA passes `check`.
-- [ ] ISC-10: at least 6 `.github/instructions/*.instructions.md` files with `applyTo` globs (python, tests, powershell, sql/notebooks, databricks bundles, markdown docs) and each under 4k chars. Falsifier: count or frontmatter.
+- [x] ISC-6: `.github/copilot-instructions.md` exists, under 12k chars, contains the response format, the five constitutional rules (output format, verification, analysis-read-only, security protocol, self-healing), the Algorithm pointer, and the routing table. Falsifier: grep for each rule heading fails. — evidence: 11 headings grep, 10,950 chars (c525246)
+- [x] ISC-7: `SYSTEM/ALGORITHM/LATEST` names a version whose file exists and states the run-complete claims (goal preserved, done written first, anti-claims, prerequisites probed, ambiguity resolved, evidence per claim, class sweep, ask fidelity, second look, trail, spend). Falsifier: any of those eleven ideas missing from the file. — evidence: v1.0.0.md 13 claims grep (c525246)
+- [x] ISC-8: `SYSTEM/RULES/Verification.md`, `SelfHealing.md`, `Philosophy.md` exist, each with freshness frontmatter and at least the rule names of their originals (modality fidelity, defer on unavailable verifier, appearance ≠ existence, reproduce before fixing, temporal fidelity, restore parity, cache fidelity; routing table for where a rule lives; intent engineering + ideal-state prompting). Falsifier: grep. — evidence: RULES grep all 8 names (c525246)
+- [x] ISC-9: `SYSTEM/DOCUMENTATION/ISAFormat.md` defines the ISA sections, claim syntax, `(after:)` edges, anti-claims, fog, remaining work, and `kaios isa check` enforces it. Falsifier: a malformed ISA passes `check`. — evidence: isa-bad.md fails check (c525246)
+- [x] ISC-10: at least 6 `.github/instructions/*.instructions.md` files with `applyTo` globs (python, tests, powershell, sql/notebooks, databricks bundles, markdown docs) and each under 4k chars. Falsifier: count or frontmatter. — evidence: 6 instructions, applyTo, <4k (c525246)
 
 ### F2 · Hooks
 Why: doctrine that is not enforced deterministically decays; the hook layer is what makes Kai keep its promises.
 
-- [ ] ISC-11: `.github/hooks/kaios.json` registers all eight Copilot events, each with `command` and `windows` entries pointing at the runner. Falsifier: `kaios hooks list` shows fewer than 8.
-- [ ] ISC-12: `.github/hooks/kaios.ps1` reads stdin, locates python, runs `python -m kaios.hooks <Event>`, and passes stdout through; `pwsh -File .github/hooks/kaios.ps1 SessionStart < sample.json` returns valid JSON. Falsifier: non-JSON or non-zero exit.
-- [ ] ISC-13: the runner never crashes the harness: a hook module that raises still yields valid JSON with `continue: true` and the error logged to `hook-events.jsonl`. Falsifier: test with a deliberately failing hook.
-- [ ] ISC-14: at least 25 hook modules exist across the eight events, each with a docstring stating its rule and its test in `tests/test_hooks.py`. Falsifier: `kaios hooks list` count < 25 or a hook without a test.
-- [ ] ISC-15: PreToolUse guard returns `deny` for `rm -rf /`, `git push --force` to main, `DROP TABLE`, `databricks workspace delete`, and `ask` for `databricks bundle deploy -t prod`; returns nothing for `git status`. Falsifier: table-driven test.
-- [ ] ISC-16: SessionStart injects: doctrine pointer, active ISA summary, memory hot layer, time/date, and config flags, as one `additionalContext` string under 6k chars. Falsifier: test on a fixture home.
-- [ ] ISC-17: Stop gate blocks (`continue: false`) when the active ISA has a claim checked `[x]` without an evidence stub, and passes otherwise. Falsifier: two fixture ISAs.
-- [ ] ISC-18: `kaios hooks probe` fires all eight events with sample stdin and prints a pass table; `scripts/Probe-Hooks.ps1` does the same through the PowerShell wrapper. Falsifier: any event row not OK.
+- [x] ISC-11: `.github/hooks/kaios.json` registers all eight Copilot events, each with `command` and `windows` entries pointing at the runner. Falsifier: `kaios hooks list` shows fewer than 8. — evidence: hooks list events=8 (c525246)
+- [x] ISC-12: `.github/hooks/kaios.ps1` reads stdin, locates python, runs `python -m kaios.hooks <Event>`, and passes stdout through; `pwsh -File .github/hooks/kaios.ps1 SessionStart < sample.json` returns valid JSON. Falsifier: non-JSON or non-zero exit. — evidence: kaios.ps1 SessionStart valid JSON (c525246)
+- [x] ISC-13: the runner never crashes the harness: a hook module that raises still yields valid JSON with `continue: true` and the error logged to `hook-events.jsonl`. Falsifier: test with a deliberately failing hook. — evidence: test_hooks crash tests OK (c525246)
+- [x] ISC-14: at least 25 hook modules exist across the eight events, each with a docstring stating its rule and its test in `tests/test_hooks.py`. Falsifier: `kaios hooks list` count < 25 or a hook without a test. — evidence: hooks list modules=30 (c525246)
+- [x] ISC-15: PreToolUse guard returns `deny` for `rm -rf /`, `git push --force` to main, `DROP TABLE`, `databricks workspace delete`, and `ask` for `databricks bundle deploy -t prod`; returns nothing for `git status`. Falsifier: table-driven test. — evidence: deny/ask/none table via runner (c525246)
+- [x] ISC-16: SessionStart injects: doctrine pointer, active ISA summary, memory hot layer, time/date, and config flags, as one `additionalContext` string under 6k chars. Falsifier: test on a fixture home. — evidence: SessionStart context <6k (c525246)
+- [x] ISC-17: Stop gate blocks (`continue: false`) when the active ISA has a claim checked `[x]` without an evidence stub, and passes otherwise. Falsifier: two fixture ISAs. — evidence: test_hooks Stop gate OK (c525246)
+- [x] ISC-18: `kaios hooks probe` fires all eight events with sample stdin and prints a pass table; `scripts/Probe-Hooks.ps1` does the same through the PowerShell wrapper. Falsifier: any event row not OK. — evidence: hooks probe + Probe-Hooks.ps1 8/8 (c525246)
 
 ### F3 · Skills
 Why: skills carry the thinking and domain capabilities that made the original heavy.
 
-- [ ] ISC-19: at least 25 skills under `.github/skills/<Name>/SKILL.md`, each with valid frontmatter (`name` lowercase-hyphen ≤64, `description` ≤1024 containing "USE WHEN"), enforced by `tests/test_skills.py`. Falsifier: any skill failing schema.
-- [ ] ISC-20: the set includes these names: isa, algorithm, cortex, create-skill, red-team, council, first-principles, science, iterative-depth, aperture-oscillation, root-cause-analysis, systems-thinking, bitter-pill, prompting, evals, hardening, research, fabric, html-report, trim, upgrade, suggest-skills, loop, optimize, kaios-setup, databricks, pr-review, verify. Falsifier: missing name.
-- [ ] ISC-21: every skill body is ideal-state prompting: it states done-criteria, USE WHEN / NOT FOR, and tool contracts; `tests/test_skills.py` fails on numbered step-choreography over 8 steps without a keep-class tag. Falsifier: test.
-- [ ] ISC-22: skills that need a deterministic tool ship it as `.py` under the skill folder or call `python -m kaios …`; each such script runs `--help` with exit 0. Falsifier: script without `--help`.
+- [x] ISC-19: at least 25 skills under `.github/skills/<Name>/SKILL.md`, each with valid frontmatter (`name` lowercase-hyphen ≤64, `description` ≤1024 containing "USE WHEN"), enforced by `tests/test_skills.py`. Falsifier: any skill failing schema. — evidence: 30 skills, test_skills OK (c525246)
+- [x] ISC-20: the set includes these names: isa, algorithm, cortex, create-skill, red-team, council, first-principles, science, iterative-depth, aperture-oscillation, root-cause-analysis, systems-thinking, bitter-pill, prompting, evals, hardening, research, fabric, html-report, trim, upgrade, suggest-skills, loop, optimize, kaios-setup, databricks, pr-review, verify. Falsifier: missing name. — evidence: 29 required names grep (c525246)
+- [x] ISC-21: every skill body is ideal-state prompting: it states done-criteria, USE WHEN / NOT FOR, and tool contracts; `tests/test_skills.py` fails on numbered step-choreography over 8 steps without a keep-class tag. Falsifier: test. — evidence: validate_skill --strict 0/30 failed (c525246)
+- [x] ISC-22: skills that need a deterministic tool ship it as `.py` under the skill folder or call `python -m kaios …`; each such script runs `--help` with exit 0. Falsifier: script without `--help`. — evidence: all skill .py --help exit 0 (c525246)
 
 ### F4 · Agents and multi-model routing
 Why: Copilot exposes several vendors; the value is using each where it is strongest and never letting a builder grade its own work.
 
-- [ ] ISC-23: `SYSTEM/CONFIG/models.json` defines roles max, high, medium, cross, third, research with prioritized model lists, and `kaios models apply` rewrites every agent's `model:` from it. Falsifier: change the registry, apply, diff agent files.
-- [ ] ISC-24: at least 9 agents: Kai (orchestrator, max), Planner (max), Builder (high), Reviewer (max, fresh context), Auditor (cross, read-only), Gemini-seat third opinion (third), Researcher (research), Setup (max), DatabricksOps (high), Verifier (high). Each has `tools`, `model`, `description`, and a `# kaios-role:` line. Falsifier: `tests/test_agents.py`.
-- [ ] ISC-25: Kai can dispatch subagents: its `agents:` list names Planner, Builder, Reviewer, Auditor, Researcher, Verifier and its `tools` include `agent`. Falsifier: frontmatter check.
-- [ ] ISC-26: the Council skill seats one agent per vendor family present in the registry and its SKILL.md documents the rule that a second look is always a different family from the builder. Falsifier: grep.
-- [ ] ISC-27: `SYSTEM/DOCUMENTATION/ModelRouting.md` explains the role rungs and which vendor is used for what, with the falsifier that no model name appears in any doctrine prose outside `models.json`. Falsifier: grep model names in `SYSTEM/**.md`, `.github/copilot-instructions.md`, instructions, skills, and agent bodies; the rendered `model:` frontmatter line in agents is the registry's output and is exempt.
+- [x] ISC-23: `SYSTEM/CONFIG/models.json` defines roles max, high, medium, cross, third, research with prioritized model lists, and `kaios models apply` rewrites every agent's `model:` from it. Falsifier: change the registry, apply, diff agent files. — evidence: models set/apply rewrote Kai.agent.md (c525246)
+- [x] ISC-24: at least 9 agents: Kai (orchestrator, max), Planner (max), Builder (high), Reviewer (max, fresh context), Auditor (cross, read-only), Gemini-seat third opinion (third), Researcher (research), Setup (max), DatabricksOps (high), Verifier (high). Each has `tools`, `model`, `description`, and a `# kaios-role:` line. Falsifier: `tests/test_agents.py`. — evidence: test_agents 10 OK (c525246)
+- [x] ISC-25: Kai can dispatch subagents: its `agents:` list names Planner, Builder, Reviewer, Auditor, Researcher, Verifier and its `tools` include `agent`. Falsifier: frontmatter check. — evidence: Kai agents list grep (c525246)
+- [x] ISC-26: the Council skill seats one agent per vendor family present in the registry and its SKILL.md documents the rule that a second look is always a different family from the builder. Falsifier: grep. — evidence: Council SKILL grep family rule (c525246)
+- [x] ISC-27: `SYSTEM/DOCUMENTATION/ModelRouting.md` explains the role rungs and which vendor is used for what, with the falsifier that no model name appears in any doctrine prose outside `models.json`. Falsifier: grep model names in `SYSTEM/**.md`, `.github/copilot-instructions.md`, instructions, skills, and agent bodies; the rendered `model:` frontmatter line in agents is the registry's output and is exempt. — evidence: no model names outside registry/model: lines (c525246)
 
 ### F5 · Python core
 Why: deterministic tools are what let hooks and skills do real work without a runtime the workplace cannot install.
 
-- [ ] ISC-28: `python -m kaios doctor` runs on a fresh `KAIOS_HOME` and reports every check with PASS/WARN/FAIL, exit 0 when nothing FAILs. Falsifier: run in a temp home.
-- [ ] ISC-29: `kaios isa scaffold/check/frontier/status/render/list` work against fixtures; `frontier` respects `(after:)` edges and tombstoned claims. Falsifier: `tests/test_isa.py`.
-- [ ] ISC-30: `kaios memory capture/search/digest/health/knowledge` write and read JSONL/Markdown under `KAIOS_HOME/MEMORY`; search finds a captured item by substring. Falsifier: `tests/test_memory.py`.
-- [ ] ISC-31: `kaios ledger version bump` updates `SYSTEM/VERSION` and appends to the registry; `kaios ledger log` reads it back. Falsifier: `tests/test_ledger.py`.
-- [ ] ISC-32: `kaios integrity containment/docs/versions/imports` each return non-zero on a seeded violation. Falsifier: seeded fixtures.
+- [x] ISC-28: `python -m kaios doctor` runs on a fresh `KAIOS_HOME` and reports every check with PASS/WARN/FAIL, exit 0 when nothing FAILs. Falsifier: run in a temp home. — evidence: doctor exit 0 fresh home (c525246)
+- [x] ISC-29: `kaios isa scaffold/check/frontier/status/render/list` work against fixtures; `frontier` respects `(after:)` edges and tombstoned claims. Falsifier: `tests/test_isa.py`. — evidence: test_isa OK (c525246)
+- [x] ISC-30: `kaios memory capture/search/digest/health/knowledge` write and read JSONL/Markdown under `KAIOS_HOME/MEMORY`; search finds a captured item by substring. Falsifier: `tests/test_memory.py`. — evidence: test_memory OK (c525246)
+- [x] ISC-31: `kaios ledger version bump` updates `SYSTEM/VERSION` and appends to the registry; `kaios ledger log` reads it back. Falsifier: `tests/test_ledger.py`. — evidence: test_ledger OK (c525246)
+- [x] ISC-32: `kaios integrity containment/docs/versions/imports` each return non-zero on a seeded violation. Falsifier: seeded fixtures. — evidence: test_integrity OK (c525246)
 
 ### F6 · Setup and onboarding
 Why: the first run must install KaiOS itself, link what the user has, and learn their projects, with every integration optional.
 
-- [ ] ISC-33: `Install.ps1` copies agents, skills, hooks, instructions to `~/.copilot/*` (path overridable), creates `KAIOS_HOME`, renders absolute paths into the user-level hook JSON, and is idempotent (second run changes nothing). Falsifier: run twice under pwsh with a temp HOME and diff.
-- [ ] ISC-34: `Init-Workspace.ps1 <repo>` creates `.github/{copilot-instructions.md,instructions,agents,skills,hooks}` and `.vscode/mcp.json` in the target only when absent, never overwriting. Falsifier: run on a repo with an existing file.
-- [ ] ISC-35: `kaios setup detect` reports python, git, gh, databricks CLI, VS Code, PowerShell versions and presence of `.vscode/mcp.json` entries, each `found|missing`, never failing when something is missing. Falsifier: run on this machine.
-- [ ] ISC-36: the `kaios-setup` skill plus Setup agent run an interview that writes `USER/PROFILE.md`, `USER/PROJECTS.md`, per-project `.instructions.md`, a project `ISA.md` seed, and `CONFIG/config.json` with optional flags for MCP servers (GitHub, Databricks), Databricks CLI profile, and API keys stored only as env-var names. Falsifier: `kaios setup write-config fixture.json` then `kaios setup render` on a fresh home produces every listed file.
-- [ ] ISC-37: `README.md` gives a five-minute install, the hook probe, the setup command, and a table of what is optional. Falsifier: grep for each section.
+- [x] ISC-33: `Install.ps1` copies agents, skills, hooks, instructions to `~/.copilot/*` (path overridable), creates `KAIOS_HOME`, renders absolute paths into the user-level hook JSON, and is idempotent (second run changes nothing). Falsifier: run twice under pwsh with a temp HOME and diff. — evidence: Install.ps1 double run 0 changed (c525246)
+- [x] ISC-34: `Init-Workspace.ps1 <repo>` creates `.github/{copilot-instructions.md,instructions,agents,skills,hooks}` and `.vscode/mcp.json` in the target only when absent, never overwriting. Falsifier: run on a repo with an existing file. — evidence: Init-Workspace preserved existing file (c525246)
+- [x] ISC-35: `kaios setup detect` reports python, git, gh, databricks CLI, VS Code, PowerShell versions and presence of `.vscode/mcp.json` entries, each `found|missing`, never failing when something is missing. Falsifier: run on this machine. — evidence: setup detect tools found (c525246)
+- [x] ISC-36: the `kaios-setup` skill plus Setup agent run an interview that writes `USER/PROFILE.md`, `USER/PROJECTS.md`, per-project `.instructions.md`, a project `ISA.md` seed, and `CONFIG/config.json` with optional flags for MCP servers (GitHub, Databricks), Databricks CLI profile, and API keys stored only as env-var names. Falsifier: `kaios setup write-config fixture.json` then `kaios setup render` on a fresh home produces every listed file. — evidence: write-config+render 8 files (c525246)
+- [x] ISC-37: `README.md` gives a five-minute install, the hook probe, the setup command, and a table of what is optional. Falsifier: grep for each section. — evidence: README sections grep (c525246)
 
 ### F7 · Databricks (optional)
 Why: it is the one domain tool the workplace has; wrappers make it safe and scriptable.
 
-- [ ] ISC-38: the `databricks` skill ships `databricks_tool.py` wrapping auth check, workspace ls, jobs list/run, bundle validate/deploy (prod behind ask), SQL query via CLI, notebook export; it uses `subprocess` with argument arrays, never shell strings, and exits cleanly with a clear message when the CLI is absent. Falsifier: run with CLI absent here; grep for `shell=True`.
+- [x] ISC-38: the `databricks` skill ships `databricks_tool.py` wrapping auth check, workspace ls, jobs list/run, bundle validate/deploy (prod behind ask), SQL query via CLI, notebook export; it uses `subprocess` with argument arrays, never shell strings, and exits cleanly with a clear message when the CLI is absent. Falsifier: run with CLI absent here; grep for `shell=True`. — evidence: databricks_tool exit 2, no shell=True (c525246)
 
 ### F8 · Workflow builder
 Why: the principal asked (mid-build) for help building workflows; at work "workflow" means three different things and the builder must handle all of them.
 
-- [ ] ISC-39: the `create-workflow` skill plus `workflow_tool.py` interview the user to pick a kind (KaiOS multi-agent workflow, GitHub Actions workflow, Databricks job/bundle workflow), scaffold it (`workflow.json` spec + orchestrator `.agent.md` with handoffs; or `.github/workflows/<name>.yml`; or `resources/<name>.job.yml` bundle resource), validate it (`workflow_tool.py validate <file>` exits 1 on a malformed spec or YAML shape), and track runs in `$KAIOS_HOME/MEMORY/STATE/workflows.json`. Falsifier: scaffold each kind from a fixture answers file and validate; seeded broken spec fails.
+- [x] ISC-39: the `create-workflow` skill plus `workflow_tool.py` interview the user to pick a kind (KaiOS multi-agent workflow, GitHub Actions workflow, Databricks job/bundle workflow), scaffold it (`workflow.json` spec + orchestrator `.agent.md` with handoffs; or `.github/workflows/<name>.yml`; or `resources/<name>.job.yml` bundle resource), validate it (`workflow_tool.py validate <file>` exits 1 on a malformed spec or YAML shape), and track runs in `$KAIOS_HOME/MEMORY/STATE/workflows.json`. Falsifier: scaffold each kind from a fixture answers file and validate; seeded broken spec fails. — evidence: test_workflow 34 OK (c525246)
 
 ## Anti-claims
 
@@ -154,4 +154,14 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 ## Log
 
 - 2026-09-28: ISA scaffolded; build fan-out begins.
+- 2026-09-28: six parallel builders (doctrine, core, thinking skills, system skills, agents/installers, workflow) then hooks; each builder cross-audited neighbours' files with independent validators; three stale cross-agent findings were caught by re-verification, which drove the two snapshot commits and datable integrity reports.
+- 2026-09-28: second look elected: none beyond the builders' mutual audits. Reason: every claim has a deterministic probe that passed in one run (`verify.sh`, 39/39), two independent skill validators and two link checkers agreed tree-wide, and the surface is a private work repo, not an authority boundary. Recorded per Algorithm claim 11.
 - 2026-09-28: principal added "workflow builder" mid-run → F8/ISC-39; ⚠️ interpreting "workflow" as all three work meanings (KaiOS agent workflow, GitHub Actions, Databricks job).
+
+## Remaining Work
+
+- [ ] Run on a real Windows machine: `Install.ps1`, `Probe-Hooks.ps1` and `Test-PS51.ps1` were verified here under PowerShell 7 with 5.1 tokens banned by the parser check, not under a real Windows PowerShell 5.1 host.
+- [ ] Capture the real Copilot stdin schema on first run (`MEMORY/OBSERVABILITY/hook-events.jsonl`) and tighten the hooks' field reads from tolerant `get()` to the observed shape.
+- [ ] Confirm the model names the org enabled in Copilot's picker and run `python -m kaios models set <role> …` then `models apply`; the shipped defaults are placeholders from the registry.
+- [ ] Decide whether a Databricks MCP server is allowed at work; the `.vscode/mcp.example.json` entry is a documented placeholder.
+
