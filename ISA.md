@@ -129,7 +129,7 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 
 | ISC | probe | type |
 |---|---|---|
-| 1 | `python -m pytest tests -q` | bash |
+| 1 | `python -m unittest discover -s tests -t .` | bash |
 | 2, 3, 32 | `python -m kaios integrity …` | bash |
 | 4, 12, 18, 33, 34 | `pwsh -File scripts/… ` | bash |
 | 6–10, 20, 26, 27, 37 | grep | bash |
