@@ -27,6 +27,7 @@ from kaios.hooks import state as state_mod
 from kaios.hooks import surfaces
 from kaios.hooks import util
 from kaios.hooks.samples import sample
+from kaios import events as events_mod
 from kaios.paths import Paths
 from tests.support import TempHomeCase, fixtures, repo_root, write
 
@@ -336,12 +337,24 @@ class ListTests(HookCase):
     """ISC-11 and ISC-14: eight registered events, 25+ hook modules."""
 
     def test_registry_registers_all_eight_events(self):
-        path = repo_root() / ".github" / "hooks" / "kaios.json"
+        path = repo_root() / events_mod.REGISTRY_RELATIVE
         self.assertTrue(path.is_file(), "the hook registry is missing")
-        registered = hooks_cli.registry_events(path)
+        registered = list(events_mod.read_registry(path))
         self.assertEqual(len(registered), 8, registered)
         for name in EVENTS:
             self.assertIn(name, registered)
+
+    def test_registry_report_carries_the_reason_it_could_not_be_read(self):
+        missing = hooks_cli.registry_report(self.scratch / "absent" / "kaios.json")
+        self.assertFalse(missing["exists"])
+        self.assertEqual(missing["events_registered"], 0)
+        self.assertIn("Error", missing["error"])
+
+        malformed = write(self.scratch / "malformed.json", '{"version": 1, "hooks": {}}')
+        report = hooks_cli.registry_report(malformed)
+        self.assertTrue(report["exists"])
+        self.assertEqual(report["events_registered"], 0)
+        self.assertIn("no hooks object", report["error"])
 
     def test_list_reports_eight_events_and_enough_modules(self):
         out = io.StringIO()

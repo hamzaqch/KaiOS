@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 from . import EVENTS, canonical
 from .. import events as events_mod
@@ -42,24 +43,28 @@ def registry_file(paths: Paths):
     return candidates[0]
 
 
-def registry_events(path) -> list:
-    """Event names one registration file registers, in file order.
+def registry_report(path) -> dict:
+    """What one registration file registers, and why it could not be read.
 
-    Addressed by path rather than by repository root, because the installed
+    Parsing is ``kaios.events.read_registry``, which is path-addressed and
+    raises rather than substituting ``EVENTS``. Both matter here: the installed
     registry under ``KAIOS_HOME/hooks`` is not at the checkout-relative
-    location, and reported without a fallback, because ISC-11's falsifier is a
-    registry naming fewer than eight events. ``kaios.events.registry_events``
-    is the root-relative reader and substitutes ``EVENTS`` when the file cannot
-    be read, which would hide exactly that.
+    location, and ISC-11's falsifier is a registry naming fewer than eight
+    events, which a fallback to the default would mask. The failure reason is
+    carried into the report because ``hooks list`` is the surface someone reads
+    when that claim fails.
     """
+    report: dict = {"path": str(path), "exists": Path(path).is_file()}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    hooks = data.get("hooks") if isinstance(data, dict) else None
-    if not isinstance(hooks, dict):
-        return []
-    return [str(name) for name in hooks]
+        registered = list(events_mod.read_registry(path))
+    except (OSError, ValueError) as exc:
+        report["events_registered"] = 0
+        report["registered"] = []
+        report["error"] = "%s: %s" % (type(exc).__name__, exc)
+        return report
+    report["events_registered"] = len(registered)
+    report["registered"] = registered
+    return report
 
 
 # ---------------------------------------------------------------- commands
@@ -68,16 +73,12 @@ def registry_events(path) -> list:
 def do_list(paths: Paths, as_md: bool = False) -> int:
     events = runner_mod.inventory()
     path = registry_file(paths)
-    registered = registry_events(path)
+    registry = registry_report(path)
+    registered = registry["registered"]
     payload = {
         "events": events,
         "count": sum(len(names) for names in events.values()),
-        "registry": {
-            "path": str(path),
-            "exists": path.is_file(),
-            "events_registered": len(registered),
-            "registered": registered,
-        },
+        "registry": registry,
     }
     if as_md:
         lines = ["# kaios hooks", "", "| event | modules | hooks |", "|---|---|---|"]
