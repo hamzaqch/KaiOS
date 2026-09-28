@@ -71,8 +71,12 @@ def read_stdin(stream=None) -> tuple:
     handle = sys.stdin if stream is None else stream
     raw = ""
     try:
-        if handle is not None:
-            raw = handle.read() or ""
+        if handle is None:
+            return {}, None
+        # A terminal has nothing piped into it; reading would block until EOF.
+        if stream is None and hasattr(handle, "isatty") and handle.isatty():
+            return {}, None
+        raw = handle.read() or ""
     except (OSError, ValueError, UnicodeDecodeError) as exc:
         return {}, "stdin unreadable: %s" % exc
     if not raw.strip():

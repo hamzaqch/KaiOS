@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .paths import DOCTRINE_DIR, LEGACY_DOCTRINE_DIRS, doctrine_candidates
@@ -479,19 +480,46 @@ CHECKS = ("containment", "docs", "versions", "imports")
 
 
 def run(name: str, root: Path | str, **kwargs) -> dict:
-    """Run one named check and return a JSON-ready report."""
+    """Run one named check and return a JSON-ready report.
+
+    Findings carry the time the scan ran and, per file, when that file was last
+    written. A finding quoted somewhere else is otherwise undatable: in a tree
+    where nothing is committed there is no revision to anchor it to, so a report
+    read an hour later cannot be told apart from a current one.
+    """
     if name not in CHECKS:
         raise ValueError("unknown check %r; expected one of %s" % (name, ", ".join(CHECKS)))
     function = {"containment": containment, "docs": docs, "versions": versions, "imports": imports}[name]
+    base = Path(root).resolve()
     ok, findings = function(root, **kwargs)
+    for finding in findings:
+        stamp = _modified(base, finding.get("file"))
+        if stamp is not None:
+            finding["file_modified"] = stamp
     return {
         "check": name,
-        "root": str(Path(root).resolve()),
+        "root": str(base),
+        "generated": _now_iso(),
         "ok": bool(ok),
         "errors": len([f for f in findings if f.get("level") == "error"]),
         "warnings": len([f for f in findings if f.get("level") == "warn"]),
         "findings": findings,
     }
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _modified(root: Path, relative) -> str | None:
+    """When the file a finding names was last written, if it still exists."""
+    if not relative or relative in (".", ""):
+        return None
+    try:
+        stat = (root / str(relative)).stat()
+    except OSError:
+        return None
+    return datetime.fromtimestamp(stat.st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def to_markdown(report: dict) -> str:
@@ -502,16 +530,19 @@ def to_markdown(report: dict) -> str:
         % ("OK" if report.get("ok") else "FAILED", report.get("errors", 0), report.get("warnings", 0)),
         "",
     ]
+    if report.get("generated"):
+        lines += ["Scanned `%s` at %s." % (report.get("root"), report["generated"]), ""]
     findings = report.get("findings") or []
     if findings:
-        lines += ["| level | code | file | message |", "|---|---|---|---|"]
+        lines += ["| level | code | file | file written | message |", "|---|---|---|---|---|"]
         for finding in findings:
             lines.append(
-                "| %s | %s | `%s` | %s |"
+                "| %s | %s | `%s` | %s | %s |"
                 % (
                     finding.get("level"),
                     finding.get("code"),
                     finding.get("file"),
+                    finding.get("file_modified") or "-",
                     str(finding.get("message") or "").replace("|", "\\|"),
                 )
             )

@@ -19,17 +19,29 @@ from .paths import Paths
 
 COMPLETE_PHASES = ("complete", "completed", "closed", "done", "shipped")
 
-_CLAIM_RE = re.compile(r"^\s*[-*]\s*\[([ xX])\]\s*(ISC[-_ ]?(\d+))\s*[:.·]?\s*(.*)$")
+#: A claim line. The id may be nested (``ISC-7.1``), so the number part takes
+#: dotted segments before the colon separator is consumed.
+_CLAIM_RE = re.compile(r"^\s*[-*]\s*\[([ xX])\]\s*(ISC[-_ ]?(\d+(?:\.\d+)*))\s*[:.·]?\s*(.*)$")
 _ANTI_ID_RE = re.compile(r"^\s*[-*]\s*(?:\[[ xX]\]\s*)?(A(\d+))\s*[:.]\s*(.*)$")
 _ANTI_WORD_RE = re.compile(r"^\s*[-*]\s*Anti\s*[:.]\s*(.*)$", re.IGNORECASE)
 _BARE_BULLET_RE = re.compile(r"^\s*[-*]\s+(?!\[)(.+)$")
 _FEATURE_RE = re.compile(r"^###\s+(F\d+)\s*(?:[·:\-–—]\s*)?(.*)$")
 _WHY_RE = re.compile(r"^\s*Why\s*:\s*(.*)$", re.IGNORECASE)
-_AFTER_RE = re.compile(r"\(\s*after\s*:\s*([^)]*)\)\s*$", re.IGNORECASE)
-#: An evidence stub, introduced by an em dash, an en dash, or a plain hyphen.
-_EVIDENCE_RE = re.compile(r"(?:—|–|-{1,2})\s*evidence\s*:\s*(.+?)\s*$", re.IGNORECASE)
+#: The edge: the last parenthetical of the body, with an optional trailing
+#: period. Leaving the period out silently dropped the edge, which blinded the
+#: unknown-prerequisite, self-reference and cycle checks.
+_AFTER_RE = re.compile(r"\(\s*after\s*:\s*([^)]*)\)\s*\.?\s*$", re.IGNORECASE)
+
+#: The separator that introduces an evidence stub: em dash, en dash, or hyphen.
+#: Matched as a separator rather than end-anchored so the LAST one wins.
+_EVIDENCE_SEP_RE = re.compile(r"(?:—|–|-{1,2})\s*evidence\s*:\s*", re.IGNORECASE)
+
+#: The falsifier separator, in the one spelling the format defines.
+FALSIFIER_TOKEN = "Falsifier:"
+
 _DROPPED_RE = re.compile(r"\[\s*DROPPED\s*:?\s*([^\]]*)\]", re.IGNORECASE)
-_ISC_REF_RE = re.compile(r"(?:ISC[-_ ]?)?(\d+)")
+_ISC_REF_RE = re.compile(r"(?:ISC[-_ ]?)?(\d+(?:\.\d+)*)")
+_CODE_SPAN_RE = re.compile(r"`[^`]*`")
 _PROGRESS_RE = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
 
 
@@ -59,6 +71,9 @@ class Claim:
     line: int = 0
     raw: str = ""
     section: str | None = None
+    statement: str = ""
+    falsifier: str | None = None
+    order: tuple = ()
 
     @property
     def open(self) -> bool:
@@ -68,6 +83,8 @@ class Claim:
         return {
             "id": self.id,
             "text": self.text,
+            "statement": self.statement,
+            "falsifier": self.falsifier,
             "checked": self.checked,
             "dropped": self.dropped,
             "after": list(self.after),
@@ -365,27 +382,33 @@ def _build_claim(
 ) -> Claim:
     text = body.strip()
 
+    # The format fixes the order these come off the line: evidence stub, then
+    # the edge, then the falsifier. Code spans are masked first so a claim can
+    # quote the syntax in backticks without the quote parsing as real.
+    evidence: str | None = None
+    masked = _mask_code_spans(text)
+    separators = list(_EVIDENCE_SEP_RE.finditer(masked))
+    if separators:
+        last = separators[-1]
+        evidence = text[last.end():].strip() or None
+        text = text[: last.start()].rstrip()
+
     after: list[str] = []
-    after_match = _AFTER_RE.search(text)
+    after_match = _AFTER_RE.search(_mask_code_spans(text))
     if after_match:
         for token in re.split(r"[,;]+|\s{2,}", after_match.group(1)):
             token = token.strip()
             if not token:
                 continue
-            for ref in re.findall(r"(?:ISC[-_ ]?)?\d+", token):
+            for ref in re.findall(r"(?:ISC[-_ ]?)?\d+(?:\.\d+)*", token):
                 after.append(_norm_claim_id(ref))
         text = text[: after_match.start()].rstrip()
 
-    evidence: str | None = None
-    evidence_match = _EVIDENCE_RE.search(text)
-    if evidence_match:
-        evidence = evidence_match.group(1).strip() or None
-        text = text[: evidence_match.start()].rstrip()
+    statement, falsifier = _split_falsifier(text)
 
     dropped_match = _DROPPED_RE.search(raw)
     dropped = dropped_match is not None
 
-    digits = re.findall(r"\d+", claim_id)
     return Claim(
         id=claim_id,
         text=text,
@@ -395,11 +418,40 @@ def _build_claim(
         evidence=evidence,
         feature=feature,
         anti=anti,
-        num=int(digits[0]) if digits else 0,
+        num=_major(claim_id),
         line=line,
         raw=raw,
         section=section,
+        statement=statement,
+        falsifier=falsifier,
+        order=_order_key(claim_id),
     )
+
+
+def _mask_code_spans(text: str) -> str:
+    """Blank out backtick spans, preserving length so offsets still line up."""
+    return _CODE_SPAN_RE.sub(lambda m: " " * len(m.group(0)), text)
+
+
+def _split_falsifier(text: str) -> tuple[str, str | None]:
+    """Split on the first ``Falsifier:``, in exactly that spelling."""
+    masked = _mask_code_spans(text)
+    at = masked.find(FALSIFIER_TOKEN)
+    if at < 0:
+        return text.strip(), None
+    statement = text[:at].strip()
+    falsifier = text[at + len(FALSIFIER_TOKEN):].strip()
+    return statement, falsifier or None
+
+
+def _order_key(claim_id: str) -> tuple:
+    """A sortable key for an id, so ``ISC-7.2`` orders after ``ISC-7.1``."""
+    return tuple(int(part) for part in re.findall(r"\d+", claim_id))
+
+
+def _major(claim_id: str) -> int:
+    key = _order_key(claim_id)
+    return key[0] if key else 0
 
 
 # ---------------------------------------------------------------- check
@@ -425,7 +477,7 @@ def _test_strategy_ids(isa: ISA) -> set:
                 for number in range(int(span.group(1)), int(span.group(2)) + 1):
                     covered.add("ISC-%d" % number)
                 continue
-            if re.fullmatch(r"(?:ISC[-_ ]?)?\d+", token):
+            if re.fullmatch(r"(?:ISC[-_ ]?)?\d+(?:\.\d+)*", token):
                 covered.add(_norm_claim_id(token))
     return covered
 
@@ -457,9 +509,18 @@ def check(isa: ISA) -> list[Finding]:
     for claim in isc:
         if claim.dropped or claim.checked:
             continue
-        if "falsifier" in claim.raw.lower():
+        if claim.falsifier:
             continue
         if claim.id in covered:
+            continue
+        if FALSIFIER_TOKEN.lower() in claim.text.lower():
+            # The word is there in the wrong case, which the format does not
+            # accept. Say so, rather than claiming no falsifier was written.
+            error(
+                "E_NO_FALSIFIER",
+                "%s spells the falsifier in the wrong case: it must be %r"
+                % (claim.id, FALSIFIER_TOKEN),
+            )
             continue
         error("E_NO_FALSIFIER", "%s has no Falsifier and no Test Strategy row" % claim.id)
 
@@ -473,14 +534,16 @@ def check(isa: ISA) -> list[Finding]:
         else:
             seen[claim.id] = claim.line
 
-    highest = 0
+    highest: tuple = ()
+    highest_id = ""
     for claim in isc:
-        if claim.num and claim.num < highest:
+        if claim.order and highest and claim.order < highest:
             error(
                 "E_ID_ORDER",
-                "%s is out of order after ISC-%d: ids must only increase" % (claim.id, highest),
+                "%s is out of order after %s: ids must only increase" % (claim.id, highest_id),
             )
-        highest = max(highest, claim.num)
+        if claim.order and claim.order > highest:
+            highest, highest_id = claim.order, claim.id
 
     known = {claim.id for claim in isa.claims}
     for claim in isc:

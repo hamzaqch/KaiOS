@@ -3,14 +3,7 @@
 import unittest
 
 from kaios import isa as isa_mod
-# Make the shared helper importable whether the runner puts this directory or
-# the repository root on sys.path.
-import os as _os
-import sys as _sys
-
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-
-from support import TempHomeCase, fixtures, read, write
+from tests.support import TempHomeCase, fixtures, read, write
 
 
 class ParseTests(unittest.TestCase):
@@ -51,6 +44,17 @@ class ParseTests(unittest.TestCase):
         self.assertNotIn("evidence:", one.text)
         self.assertEqual(one.num, 1)
         self.assertTrue(one.line > 0)
+
+    def test_every_dash_style_introduces_an_evidence_stub(self) -> None:
+        for dash in ("—", "–", "--", "-"):
+            body = (
+                "---\nphase: climbing\nprogress: 1/1\n---\n\n# T\n\n## Goal\n\nG.\n\n"
+                "- [x] ISC-1: done. Falsifier: a probe. %s evidence: the probe printed OK\n\n"
+                "## Anti-claims\n\n- A1: nothing breaks.\n"
+            ) % dash
+            claim = isa_mod.parse_text(body).by_id("ISC-1")
+            self.assertEqual(claim.evidence, "the probe printed OK", "dash %r failed" % dash)
+            self.assertNotIn("evidence", claim.text.lower())
 
     def test_tombstone(self) -> None:
         three = self.good.by_id("ISC-3")
@@ -119,6 +123,107 @@ class CheckTests(unittest.TestCase):
         self.assertNotIn("E_NO_FALSIFIER", codes)
 
 
+class EdgeParseOrderTests(unittest.TestCase):
+    """The four-step strip order, and the ways an edge used to vanish silently.
+
+    A lost edge is the worst kind of parse bug: it blinds E_UNKNOWN_AFTER,
+    E_SELF_AFTER, cycle detection and the frontier at once, with no error shown.
+    """
+
+    def _one(self, line: str) -> isa_mod.Claim:
+        return isa_mod.parse_text(self._isa(line)).isc()[0]
+
+    def _isa(self, *lines: str) -> str:
+        return (
+            "---\nphase: climbing\nprogress: 0/1\n---\n\n# T\n\n## Goal\n\nG.\n\n"
+            + "\n".join(lines)
+            + "\n\n## Anti-claims\n\n- A1: nothing breaks.\n"
+        )
+
+    def test_an_edge_before_an_evidence_stub_survives(self) -> None:
+        claim = self._one(
+            "- [x] ISC-1: Step one holds. Falsifier: it does not. (after: ISC-99) — evidence: abc123"
+        )
+        self.assertEqual(claim.after, ["ISC-99"])
+        self.assertEqual(claim.evidence, "abc123")
+        self.assertEqual(claim.statement, "Step one holds.")
+        self.assertEqual(claim.falsifier, "it does not.")
+
+    def test_that_lost_edge_is_reported_by_check(self) -> None:
+        body = self._isa(
+            "- [x] ISC-1: Step one holds. Falsifier: it does not. (after: ISC-99) — evidence: abc123"
+        )
+        self.assertIn("E_UNKNOWN_AFTER", {f.code for f in isa_mod.check(isa_mod.parse_text(body))})
+
+    def test_a_trailing_period_after_the_edge_is_allowed(self) -> None:
+        self.assertEqual(self._one("- [ ] ISC-2: Two. Falsifier: no. (after: ISC-1).").after, ["ISC-1"])
+
+    def test_a_trailing_period_and_an_evidence_stub_together(self) -> None:
+        claim = self._one("- [x] ISC-4: Four. Falsifier: no. (after: ISC-2). — evidence: ok")
+        self.assertEqual(claim.after, ["ISC-2"])
+        self.assertEqual(claim.evidence, "ok")
+
+    def test_a_backticked_edge_is_never_a_real_edge(self) -> None:
+        claim = self._one("- [ ] ISC-3: Falsifier: no. Declare it as `(after: ISC-9)`")
+        self.assertEqual(claim.after, [], "a quoted example must not become an edge")
+
+    def test_a_backticked_example_does_not_hide_a_real_edge(self) -> None:
+        claim = self._one("- [ ] ISC-5: Write `(after: ISC-9)` here. Falsifier: no. (after: ISC-1)")
+        self.assertEqual(claim.after, ["ISC-1"])
+
+    def test_a_backticked_evidence_stub_is_never_a_real_stub(self) -> None:
+        self.assertIsNone(self._one("- [ ] ISC-8: Close with `— evidence: s`. Falsifier: no.").evidence)
+
+    def test_the_last_evidence_stub_wins(self) -> None:
+        claim = self._one("- [x] ISC-6: Six. Falsifier: no. — evidence: first — evidence: second")
+        self.assertEqual(claim.evidence, "second")
+
+    def test_a_nested_id_keeps_its_id_and_its_text(self) -> None:
+        claim = self._one("- [ ] ISC-7.1: A leaf claim. Falsifier: no. (after: ISC-7)")
+        self.assertEqual(claim.id, "ISC-7.1")
+        self.assertEqual(claim.statement, "A leaf claim.")
+        self.assertEqual(claim.after, ["ISC-7"])
+        self.assertEqual(claim.num, 7)
+        self.assertEqual(claim.order, (7, 1))
+
+    def test_nested_ids_order_by_segment(self) -> None:
+        parsed = isa_mod.parse_text(
+            self._isa(
+                "- [ ] ISC-7: Parent. Falsifier: no.",
+                "- [ ] ISC-7.1: First leaf. Falsifier: no.",
+                "- [ ] ISC-7.2: Second leaf. Falsifier: no.",
+                "- [ ] ISC-8: Next. Falsifier: no.",
+            )
+        )
+        self.assertEqual([c.id for c in parsed.isc()], ["ISC-7", "ISC-7.1", "ISC-7.2", "ISC-8"])
+        self.assertNotIn("E_ID_ORDER", {f.code for f in isa_mod.check(parsed)})
+
+    def test_a_backwards_nested_id_is_still_caught(self) -> None:
+        body = self._isa(
+            "- [ ] ISC-7.2: Second leaf. Falsifier: no.",
+            "- [ ] ISC-7.1: First leaf. Falsifier: no.",
+        )
+        self.assertIn("E_ID_ORDER", {f.code for f in isa_mod.check(isa_mod.parse_text(body))})
+
+    def test_a_test_strategy_row_can_name_a_nested_id(self) -> None:
+        body = (
+            "---\nphase: climbing\nprogress: 0/1\n---\n\n# T\n\n## Goal\n\nG.\n\n"
+            "- [ ] ISC-7.1: A leaf with no falsifier word.\n\n"
+            "## Anti-claims\n\n- A1: nothing breaks.\n\n"
+            "## Test Strategy\n\n| ISC | probe | type |\n|---|---|---|\n| 7.1 | a command | bash |\n"
+        )
+        self.assertNotIn("E_NO_FALSIFIER", {f.code for f in isa_mod.check(isa_mod.parse_text(body))})
+
+    def test_the_falsifier_spelling_is_case_sensitive(self) -> None:
+        self.assertIsNone(self._one("- [ ] ISC-8: Eight. falsifier: no.").falsifier)
+
+    def test_a_wrong_case_falsifier_says_so(self) -> None:
+        body = self._isa("- [ ] ISC-1: Eight. falsifier: no.")
+        findings = [f for f in isa_mod.check(isa_mod.parse_text(body)) if f.code == "E_NO_FALSIFIER"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("wrong case", findings[0].message)
+
+
 class FrontierTests(unittest.TestCase):
     def setUp(self) -> None:
         self.isa = isa_mod.parse(fixtures() / "isa-good.md")
@@ -183,6 +288,42 @@ class ScaffoldTests(TempHomeCase):
             [f.to_dict() for f in isa_mod.errors(findings)], [], "a scaffolded ISA must pass check"
         )
 
+    def test_scaffold_records_the_stated_goal_in_frontmatter(self) -> None:
+        written = isa_mod.scaffold(
+            slug="quoted",
+            goal='The load is "complete"\nwhen the row count matches.',
+            paths=self.paths,
+        )
+        parsed = isa_mod.parse(written)
+        stated = str(parsed.frontmatter.get("stated_goal") or "")
+        self.assertIn("row count matches", stated)
+        self.assertNotIn('"', stated, "a double quote would break the frontmatter value")
+        self.assertNotIn("\n", stated)
+        self.assertEqual([f.to_dict() for f in isa_mod.errors(isa_mod.check(parsed))], [])
+
+    def test_scaffold_uses_the_documented_section_order(self) -> None:
+        written = isa_mod.scaffold(slug="ordered", goal="Prove the order holds.", paths=self.paths)
+        self.assertEqual(
+            list(isa_mod.parse(written).sections.keys()),
+            [
+                "Problem",
+                "Vision",
+                "Out of Scope",
+                "Language",
+                "Principles",
+                "Constraints",
+                "Dependencies",
+                "Goal",
+                "Features",
+                "Not yet specified",
+                "Anti-claims",
+                "Test Strategy",
+                "Decisions",
+                "Log",
+                "Remaining Work",
+            ],
+        )
+
     def test_scaffold_registers_the_isa(self) -> None:
         isa_mod.scaffold(slug="alpha", goal="Do the thing.", paths=self.paths)
         entries = isa_mod.registry(self.paths)
@@ -245,3 +386,21 @@ class SlugTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EdgeAndEvidenceOrderTests(unittest.TestCase):
+    """Regression: an evidence stub after the (after:) edge must not hide the edge."""
+
+    def test_edge_survives_trailing_evidence_stub(self) -> None:
+        text = (
+            "---\nphase: climbing\nprogress: 1/1\n---\n# T\n\n## Goal\n\ng\n\n## Claims\n\n"
+            "- [x] ISC-1: Step one holds. Falsifier: it does not. (after: ISC-99) — evidence: abc123\n\n"
+            "## Anti-claims\n\n- A1: none\n"
+        )
+        parsed = isa_mod.parse_text(text)
+        claim = parsed.claims[0]
+        self.assertEqual(claim.after, ["ISC-99"])
+        self.assertEqual(claim.evidence, "abc123")
+        codes = [f.code for f in isa_mod.check(parsed)]
+        self.assertIn("E_UNKNOWN_AFTER", codes)
+

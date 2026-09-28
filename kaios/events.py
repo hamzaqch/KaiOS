@@ -6,15 +6,19 @@ agree. ``EVENTS`` is ordered by when the event fires in a session.
 
 from __future__ import annotations
 
+#: Must match the event keys in ``.github/hooks/kaios.json`` and the hook module
+#: directories under ``kaios/hooks/``. That registry is the source of truth at
+#: render time; this tuple is the default for an install with no checkout beside
+#: it, and what ``canonical`` validates against.
 EVENTS: tuple[str, ...] = (
     "SessionStart",
     "UserPromptSubmit",
     "PreToolUse",
     "PostToolUse",
-    "Stop",
-    "SubagentStop",
     "PreCompact",
-    "SessionEnd",
+    "SubagentStart",
+    "SubagentStop",
+    "Stop",
 )
 
 

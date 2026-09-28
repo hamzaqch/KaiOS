@@ -29,7 +29,7 @@ task: "short description, about eight words"
 slug: 20260928-140000_import-retry
 started: 2026-09-28T14:00:00Z
 updated: 2026-09-28T14:40:00Z
-principal_stated_goal: "the verbatim words of the ask, byte for byte"
+stated_goal: "the verbatim words of the ask, byte for byte"
 iteration: 2
 frozen: false
 ---
@@ -43,7 +43,7 @@ frozen: false
 | `slug` | recommended | `YYYYMMDD-HHMMSS_kebab-name` for task ISAs; falls back to the directory name. A project ISA may use the project name. |
 | `started` | recommended | ISO 8601 with a `Z`. |
 | `updated` | recommended | ISO 8601 with a `Z`. Rewritten on every write. |
-| `principal_stated_goal` | conditional | the verbatim ask. Never paraphrased, never corrected, never trimmed. Set it when the ask has real propositional content; use `null` when the literal was contentless ("make it better"). Immutable unless the ask is explicitly revised, and a revision is recorded in `## Decisions`. |
+| `stated_goal` | conditional | the verbatim ask. Never paraphrased, never corrected, never trimmed. Set it when the ask has real propositional content; use `null` when the literal was contentless ("make it better"). Immutable unless the ask is explicitly revised, and a revision is recorded in `## Decisions`. |
 | `iteration` | conditional | integer, appears from the second run onward. Incremented when a completed ISA is reopened. |
 | `frozen` | optional | `true` means a body edit does not reopen a completed ISA. Default `false`. |
 
@@ -237,7 +237,7 @@ One row per claim. Column order is the parser contract:
 | `screenshot` | an image that was looked at |
 | `manual` | a person says yes on encounter |
 
-`anchors_to` is `literal` when the claim traces straight to `principal_stated_goal`, or `derived: <name>` when it traces through a named derivation. Backticks around a `tool` value are stripped as formatting. A row whose `isc` does not match a claim, and a live claim with no row, are both check failures.
+`anchors_to` is `literal` when the claim traces straight to `stated_goal`, or `derived: <name>` when it traces through a named derivation. Backticks around a `tool` value are stripped as formatting. A row whose `isc` does not match a claim, and a live claim with no row, are both check failures.
 
 ## What `isa check` enforces
 
@@ -258,7 +258,7 @@ Hard failures, exit 1:
 
 Warnings, reported and not blocking: `progress` disagreeing with the mechanical count, and a closed claim with no evidence stub. Both are hard at the Stop gate rather than here, because `isa check` runs mid-build when a count is legitimately in flux for a moment, and the close is where it must be exact.
 
-Advisory findings, reported and never blocking: a live claim with no `## Test Strategy` row, a claim whose statement fails the splitting test, a named subsystem with no claims, a `Why:` line that restates its feature name, and a `principal_stated_goal` that is absent on substantial work. These are judgment calls, and a count that blocks is a count that gets manufactured.
+Advisory findings, reported and never blocking: a live claim with no `## Test Strategy` row, a claim whose statement fails the splitting test, a named subsystem with no claims, a `Why:` line that restates its feature name, and a `stated_goal` that is absent on substantial work. These are judgment calls, and a count that blocks is a count that gets manufactured.
 
 ## A canonical ISA
 
@@ -272,7 +272,7 @@ task: "add --json output to the report tool"
 slug: 20260928-093000_report-json
 started: 2026-09-28T09:30:00Z
 updated: 2026-09-28T10:05:00Z
-principal_stated_goal: "make the report tool able to emit json so the scheduler can parse it"
+stated_goal: "make the report tool able to emit json so the scheduler can parse it"
 ---
 
 # Report tool JSON output

@@ -266,11 +266,12 @@ def _write(path: Path, text: str) -> str:
 
 
 def _bullets(items, empty: str = "- (none recorded)") -> str:
-    """Render a list, a comma string, or a single sentence as markdown bullets."""
-    if isinstance(items, str):
-        candidates = [items] if "," not in items else items.split(",")
-    else:
-        candidates = list(items or [])
+    """Render a list as markdown bullets; a string is one bullet, never split.
+
+    Splitting a string on commas would turn one sentence into several broken
+    ones, so prose stays whole and only a real list becomes several bullets.
+    """
+    candidates = [items] if isinstance(items, str) else list(items or [])
     values = [str(item).strip() for item in candidates if str(item).strip()]
     return "\n".join("- %s" % value for value in values) if values else empty
 
@@ -286,6 +287,16 @@ def _prose(value, empty: str = "(not stated)") -> str:
 
 def project_slug(name: str) -> str:
     return isa_mod.slugify(name)
+
+
+def project_goal(project: dict, name: str | None = None) -> str:
+    """The seed goal for a project ISA, from whatever the interview captured."""
+    label = name or project.get("name") or "this project"
+    for key in ("goal", "done_means", "purpose"):
+        candidate = _prose(project.get(key), "")
+        if candidate:
+            return candidate
+    return "State what done looks like for %s, as falsifiable claims." % label
 
 
 def project_glob(project: dict) -> str:
@@ -401,12 +412,9 @@ def render(
 
         isa_path = resolved.projects_dir / slug / "ISA.md"
         if write:
-            goal = str(project.get("goal") or "").strip() or (
-                "State what done looks like for %s, as falsifiable claims." % name
-            )
             written_isa = isa_mod.scaffold(
                 slug=slug,
-                goal=goal,
+                goal=project_goal(project, name),
                 paths=resolved,
                 task="Work on %s" % name,
                 dest=isa_path,

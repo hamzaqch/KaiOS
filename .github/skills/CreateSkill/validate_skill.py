@@ -189,17 +189,55 @@ def check_tools(directory, findings, warnings):
     return tools
 
 
+def link_resolves(containing_dir, target, base):
+    """True when the link resolves next to its file, or from the repository root."""
+    if os.path.exists(os.path.normpath(os.path.join(containing_dir, target))):
+        return True
+    if base and not os.path.isabs(target):
+        return os.path.exists(os.path.normpath(os.path.join(base, target)))
+    return False
+
+
+def repo_root(start):
+    """Nearest ancestor holding a .git entry, or None."""
+    current = os.path.abspath(start)
+    while True:
+        if os.path.exists(os.path.join(current, ".git")):
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return None
+        current = parent
+
+
 def check_links(directory, findings):
-    skill_md = os.path.join(directory, "SKILL.md")
-    try:
-        with open(skill_md, "r", encoding="utf-8") as handle:
-            text = handle.read()
-    except OSError:
-        return
-    for target in re.findall(r"\]\((?!https?:)([^)#]+)\)", text):
-        candidate = os.path.join(directory, target.strip())
-        if not os.path.exists(candidate):
-            findings.append("broken relative link: %s" % target.strip())
+    """Every markdown file in the skill, not only SKILL.md. A dead link in a
+    reference file is just as broken and is the one a doc-integrity gate finds."""
+    base = repo_root(directory)
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for filename in sorted(files):
+            if not filename.endswith(".md"):
+                continue
+            path = os.path.join(root, filename)
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    text = handle.read()
+            except OSError:
+                continue
+            for target in re.findall(r"\]\((?!https?:|mailto:|#)([^)#]+)\)", text):
+                target = target.strip()
+                if not target or target.startswith("<"):
+                    continue
+                # A link resolves against the file that contains it, or, because
+                # docs here write paths like SYSTEM/DOCUMENTATION/X.md freely,
+                # against the repository root. Either form counts as resolved.
+                if link_resolves(root, target, base):
+                    continue
+                findings.append(
+                    "broken relative link in %s: %s"
+                    % (os.path.relpath(path, directory), target)
+                )
 
 
 def validate(directory):

@@ -108,6 +108,8 @@ The config schema, with every optional block:
 
 A worked fixture, including the project fields that render into prose: [references/answers-example.json](references/answers-example.json).
 
+One rendering rule worth knowing before you write an answers file. A string field renders as exactly one bullet and is never split on punctuation, so a sentence containing commas stays whole. When you want several bullets, pass a JSON array. That is why `done_means` is a single sentence and `pain_points` is a list in the fixture.
+
 ## Constraints and gotchas
 
 - Everything is optional. KaiOS has to work with zero integrations linked, and the interview must never imply otherwise or stall waiting for one.

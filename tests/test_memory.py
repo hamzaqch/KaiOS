@@ -5,14 +5,7 @@ import unittest
 
 from kaios import isa as isa_mod
 from kaios import memory as memory_mod
-# Make the shared helper importable whether the runner puts this directory or
-# the repository root on sys.path.
-import os as _os
-import sys as _sys
-
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-
-from support import TempHomeCase, read
+from tests.support import TempHomeCase, read
 
 
 class CaptureTests(TempHomeCase):
@@ -31,6 +24,15 @@ class CaptureTests(TempHomeCase):
         for kind in memory_mod.KINDS:
             memory_mod.capture(self.paths, kind, "A %s." % kind)
         self.assertEqual(len(memory_mod.captures(self.paths)), len(memory_mod.KINDS))
+
+    def test_the_kinds_the_skills_document_are_all_accepted(self) -> None:
+        for kind in ("learning", "gotcha", "decision", "preference", "probe", "incident-seed"):
+            self.assertIn(kind, memory_mod.KINDS, "%s is documented but not accepted" % kind)
+
+    def test_a_hyphenated_kind_round_trips(self) -> None:
+        record = memory_mod.capture(self.paths, "incident-seed", "The nightly load produced no file.")
+        self.assertEqual(record["kind"], "incident-seed")
+        self.assertEqual(len(memory_mod.captures(self.paths, kind="incident-seed")), 1)
 
     def test_unknown_kind_is_refused(self) -> None:
         with self.assertRaises(ValueError):

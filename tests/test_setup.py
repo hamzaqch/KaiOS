@@ -7,14 +7,7 @@ import unittest
 from kaios import isa as isa_mod
 from kaios import setup as setup_mod
 from kaios.events import EVENTS
-# Make the shared helper importable whether the runner puts this directory or
-# the repository root on sys.path.
-import os as _os
-import sys as _sys
-
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-
-from support import TempHomeCase, fixtures, read, repo_root
+from tests.support import TempHomeCase, fixtures, read, repo_root
 
 
 class DetectTests(TempHomeCase):
@@ -249,7 +242,112 @@ class HookRenderTests(TempHomeCase):
         paths = type(self.paths)(home=self.home, repo=repo_root(), cwd=repo_root())
         _, meta = setup_mod.render_hooks(paths)
         self.assertTrue(meta["wrapper"].endswith(setup_mod.WRAPPER_RELATIVE.replace("/", os.sep)))
-        self.assertEqual(meta["events"], list(EVENTS))
+        self.assertEqual(sorted(meta["events"]), sorted(EVENTS))
+        self.assertEqual(meta["missing_events"], [])
+
+    def test_the_checked_in_registry_is_the_source_of_truth(self) -> None:
+        paths = type(self.paths)(home=self.home, repo=repo_root(), cwd=repo_root())
+        source = setup_mod.repo_hooks_registry(paths)
+        self.assertIsNotNone(source, "this checkout has no .github/hooks/kaios.json")
+        original = json.loads(source.read_text(encoding="utf-8"))
+        text, meta = setup_mod.render_hooks(paths)
+        rendered = json.loads(text)
+        self.assertEqual(meta["source"], str(source))
+        self.assertEqual(rendered["version"], original.get("version", 1))
+        self.assertEqual(sorted(rendered["hooks"]), sorted(original["hooks"]))
+        for event, entries in original["hooks"].items():
+            self.assertEqual(len(rendered["hooks"][event]), len(entries))
+            for before, after in zip(entries, rendered["hooks"][event]):
+                self.assertEqual(after.get("type"), before.get("type"))
+                self.assertEqual(after.get("timeout"), before.get("timeout"))
+                self.assertTrue(after["command"].endswith("-m kaios.hooks %s" % event))
+                self.assertTrue(os.path.isabs(after["command"].split(" -m ")[0]))
+                self.assertIn(str(meta["wrapper"]), after["windows"])
+                self.assertTrue(after["windows"].endswith(event))
+
+    def test_the_template_is_the_fallback_with_no_checkout(self) -> None:
+        text, meta = setup_mod.render_hooks(self.paths)
+        self.assertEqual(meta["source"], "template")
+        self.assertEqual(sorted(json.loads(text)["hooks"]), sorted(EVENTS))
+
+    def test_a_registry_with_no_hooks_object_is_refused(self) -> None:
+        repo = self.fake_repo()
+        target = repo / setup_mod.HOOKS_REGISTRY_RELATIVE
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('{"version": 1}', encoding="utf-8")
+        paths = type(self.paths)(home=self.home, repo=repo, cwd=repo)
+        with self.assertRaises(ValueError):
+            setup_mod.render_hooks(paths)
+
+    def test_a_non_python_command_is_left_alone(self) -> None:
+        self.assertEqual(
+            setup_mod._absolute_command("pwsh -File thing.ps1", "/abs/python"),
+            "pwsh -File thing.ps1",
+        )
+        self.assertEqual(
+            setup_mod._absolute_command("python3 -m kaios.hooks Stop", "/abs/python"),
+            "/abs/python -m kaios.hooks Stop",
+        )
+
+
+class InterviewFieldTests(TempHomeCase):
+    """The fields the setup skill captures must reach the rendered files."""
+
+    ANSWERS = {
+        "optional": {"apis": {"tracker": {"env_var": "TRACKER_TOKEN", "purpose": "read ticket titles"}}},
+        "projects": [
+            {
+                "name": "Nightly Export",
+                "path": "work/nightly-export",
+                "purpose": "Ship a dated extract to the finance share every night.",
+                "done_means": "The dated file exists, the count matches, and a failure alerts the owner.",
+                "pain_points": ["Reruns duplicated a day's file.", "Schema drift reads as a count mismatch."],
+            }
+        ],
+    }
+
+    def setUp(self) -> None:
+        super().setUp()
+        setup_mod.render(self.ANSWERS, paths=self.paths)
+        self.instructions = read(self.paths.projects_dir / "nightly-export.instructions.md")
+
+    def test_purpose_renders_as_prose(self) -> None:
+        self.assertIn("Ship a dated extract to the finance share every night.", self.instructions)
+
+    def test_a_single_sentence_stays_one_bullet(self) -> None:
+        self.assertIn(
+            "- The dated file exists, the count matches, and a failure alerts the owner.",
+            self.instructions,
+        )
+        self.assertNotIn("- the count matches", self.instructions)
+
+    def test_pain_points_render_one_bullet_each(self) -> None:
+        self.assertIn("- Reruns duplicated a day's file.", self.instructions)
+        self.assertIn("- Schema drift reads as a count mismatch.", self.instructions)
+
+    def test_an_api_purpose_reaches_the_profile_without_the_key(self) -> None:
+        profile = read(self.paths.profile)
+        self.assertIn("tracker via TRACKER_TOKEN for read ticket titles", profile)
+
+    def test_the_isa_seed_goal_comes_from_the_interview(self) -> None:
+        seeded = read(self.paths.projects_dir / "nightly-export" / "ISA.md")
+        self.assertIn("The dated file exists, the count matches", seeded)
+        self.assertNotIn("State what done looks like", seeded)
+
+
+class ProjectGoalTests(unittest.TestCase):
+    def test_an_explicit_goal_wins(self) -> None:
+        project = {"name": "A", "goal": "G.", "done_means": "D.", "purpose": "P."}
+        self.assertEqual(setup_mod.project_goal(project), "G.")
+
+    def test_done_means_is_the_next_choice(self) -> None:
+        self.assertEqual(setup_mod.project_goal({"name": "A", "done_means": "D.", "purpose": "P."}), "D.")
+
+    def test_purpose_is_the_last_stated_choice(self) -> None:
+        self.assertEqual(setup_mod.project_goal({"name": "A", "purpose": "P."}), "P.")
+
+    def test_a_bare_project_gets_a_prompt_to_articulate_done(self) -> None:
+        self.assertIn("falsifiable claims", setup_mod.project_goal({"name": "A"}))
 
 
 class GlobTests(unittest.TestCase):

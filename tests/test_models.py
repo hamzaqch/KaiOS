@@ -4,14 +4,7 @@ import json
 import unittest
 
 from kaios import models as models_mod
-# Make the shared helper importable whether the runner puts this directory or
-# the repository root on sys.path.
-import os as _os
-import sys as _sys
-
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-
-from support import TempHomeCase, read, repo_root, write
+from tests.support import TempHomeCase, read, repo_root, write
 
 AGENT = """---
 name: Planner

@@ -76,6 +76,8 @@ The forbidden move is closing it because it looks right. "Should work" is not a 
 | `python -m kaios isa check <path>` | the wider gate: sections, id stability, ordering edges, falsifiers. |
 | `python -m kaios isa status <path>` | progress numbers for a response's verify block. |
 
+The two tools disagree on exit code by design, and the difference is the useful part. `isa check` reports a closed claim with no stub as a warning and does not fail, because a missing stub is a prompt to record evidence rather than a malformed ISA. `evidence_check.py` exits 1 on the same condition, because it is asked that one question and a non-zero answer is what a gate reads. The session-stop gate is where it actually blocks a close.
+
 The stub is one line and it points, it does not prove. A test name, a commit hash, a command, a query, a path. The proof stays in the test suite, in CI, and in version control, and the ISA is the index.
 
 ## Constraints and gotchas
@@ -85,3 +87,4 @@ The stub is one line and it points, it does not prove. A test name, a commit has
 - A hook that gates on evidence stubs will block a close that skipped this skill. That is the design, not a bug: fix the stub rather than routing around the gate.
 - An empty result is ambiguous until you prove the probe can return non-empty. Run it against a known-present case first.
 - Verifying is read-only. Finding a defect while verifying does not license fixing it in the same breath; report it, then decide.
+

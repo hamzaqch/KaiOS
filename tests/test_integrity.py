@@ -5,14 +5,7 @@ import os
 import unittest
 
 from kaios import integrity
-# Make the shared helper importable whether the runner puts this directory or
-# the repository root on sys.path.
-import os as _os
-import sys as _sys
-
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-
-from support import TempHomeCase, write
+from tests.support import TempHomeCase, write
 
 MARKER = "seeded-forbidden-marker"
 
@@ -100,12 +93,12 @@ class DocsTests(TempHomeCase):
         return "---\nversion: 1.0.0\nlast_updated: 2026-01-01T00:00:00Z\nconvention: kaios-freshness-v1\n---\n\n%s" % body
 
     def test_a_clean_tree_passes(self) -> None:
-        write(self.root / "KAIOS" / "RULES" / "Verification.md", self._freshness())
+        write(self.root / "SYSTEM" / "RULES" / "Verification.md", self._freshness())
         ok, findings = integrity.docs(self.root)
         self.assertTrue(ok, findings)
 
     def test_a_doctrine_doc_without_freshness_frontmatter_fails(self) -> None:
-        write(self.root / "KAIOS" / "RULES" / "Verification.md", "# No frontmatter\n")
+        write(self.root / "SYSTEM" / "RULES" / "Verification.md", "# No frontmatter\n")
         ok, findings = integrity.docs(self.root)
         self.assertFalse(ok)
         self.assertEqual(findings[0]["code"], "E_FRONTMATTER")
@@ -131,34 +124,34 @@ class DocsTests(TempHomeCase):
         self.assertIn("applyto", findings[0]["message"])
 
     def test_a_dead_relative_link_fails(self) -> None:
-        write(self.root / "KAIOS" / "A.md", self._freshness("See [the rules](RULES/Missing.md).\n"))
+        write(self.root / "SYSTEM" / "A.md", self._freshness("See [the rules](RULES/Missing.md).\n"))
         ok, findings = integrity.docs(self.root)
         self.assertFalse(ok)
         self.assertEqual(findings[0]["code"], "E_DEAD_LINK")
 
     def test_a_live_relative_link_passes(self) -> None:
-        write(self.root / "KAIOS" / "RULES" / "Real.md", self._freshness())
-        write(self.root / "KAIOS" / "A.md", self._freshness("See [the rules](RULES/Real.md).\n"))
+        write(self.root / "SYSTEM" / "RULES" / "Real.md", self._freshness())
+        write(self.root / "SYSTEM" / "A.md", self._freshness("See [the rules](RULES/Real.md).\n"))
         ok, findings = integrity.docs(self.root)
         self.assertTrue(ok, findings)
 
     def test_a_root_relative_link_passes(self) -> None:
-        write(self.root / "KAIOS" / "RULES" / "Real.md", self._freshness())
+        write(self.root / "SYSTEM" / "RULES" / "Real.md", self._freshness())
         write(
-            self.root / "KAIOS" / "DOCUMENTATION" / "B.md",
-            self._freshness("See [the rules](KAIOS/RULES/Real.md).\n"),
+            self.root / "SYSTEM" / "DOCUMENTATION" / "B.md",
+            self._freshness("See [the rules](SYSTEM/RULES/Real.md).\n"),
         )
         ok, findings = integrity.docs(self.root)
         self.assertTrue(ok, findings)
 
     def test_urls_anchors_and_code_spans_are_ignored(self) -> None:
         body = "A [site](https://example.invalid/x), an [anchor](#here), and `[a span](nope.md)`.\n"
-        write(self.root / "KAIOS" / "A.md", self._freshness(body))
+        write(self.root / "SYSTEM" / "A.md", self._freshness(body))
         ok, findings = integrity.docs(self.root)
         self.assertTrue(ok, findings)
 
     def test_templates_are_exempt_from_freshness_frontmatter(self) -> None:
-        write(self.root / "KAIOS" / "TEMPLATES" / "ISA.md", "---\nphase: scoping\nprogress: 0/1\n---\n\n# T\n")
+        write(self.root / "SYSTEM" / "TEMPLATES" / "ISA.md", "---\nphase: scoping\nprogress: 0/1\n---\n\n# T\n")
         ok, findings = integrity.docs(self.root)
         self.assertTrue(ok, findings)
 
@@ -172,9 +165,9 @@ class VersionTests(TempHomeCase):
     def setUp(self) -> None:
         super().setUp()
         self.root = self.scratch / "tree"
-        write(self.root / "KAIOS" / "VERSION", "1.0.0\n")
-        write(self.root / "KAIOS" / "ALGORITHM" / "LATEST", "1.0.0\n")
-        write(self.root / "KAIOS" / "ALGORITHM" / "v1.0.0.md", "# Algorithm\n")
+        write(self.root / "SYSTEM" / "VERSION", "1.0.0\n")
+        write(self.root / "SYSTEM" / "ALGORITHM" / "LATEST", "1.0.0\n")
+        write(self.root / "SYSTEM" / "ALGORITHM" / "v1.0.0.md", "# Algorithm\n")
 
     def test_an_aligned_tree_passes(self) -> None:
         ok, findings = integrity.versions(self.root, package_version="1.0.0")
@@ -197,25 +190,25 @@ class VersionTests(TempHomeCase):
         self.assertTrue(ok, findings)
 
     def test_a_missing_version_file_fails(self) -> None:
-        (self.root / "KAIOS" / "VERSION").unlink()
+        (self.root / "SYSTEM" / "VERSION").unlink()
         ok, findings = integrity.versions(self.root, package_version="1.0.0")
         self.assertFalse(ok)
         self.assertEqual(findings[0]["code"], "E_NO_VERSION")
 
     def test_a_malformed_version_fails(self) -> None:
-        write(self.root / "KAIOS" / "VERSION", "one\n")
+        write(self.root / "SYSTEM" / "VERSION", "one\n")
         ok, findings = integrity.versions(self.root, package_version="one")
         self.assertFalse(ok)
         self.assertEqual(findings[0]["code"], "E_VERSION_FORMAT")
 
     def test_a_missing_doctrine_pointer_fails(self) -> None:
-        (self.root / "KAIOS" / "ALGORITHM" / "LATEST").unlink()
+        (self.root / "SYSTEM" / "ALGORITHM" / "LATEST").unlink()
         ok, findings = integrity.versions(self.root, package_version="1.0.0")
         self.assertFalse(ok)
         self.assertEqual([f["code"] for f in findings], ["E_NO_LATEST"])
 
     def test_a_pointer_at_nothing_fails(self) -> None:
-        write(self.root / "KAIOS" / "ALGORITHM" / "LATEST", "9.9.9\n")
+        write(self.root / "SYSTEM" / "ALGORITHM" / "LATEST", "9.9.9\n")
         ok, findings = integrity.versions(self.root, package_version="1.0.0")
         self.assertFalse(ok)
         self.assertEqual(findings[0]["code"], "E_LATEST_TARGET")
@@ -289,7 +282,36 @@ class ReportTests(TempHomeCase):
         report = integrity.run("imports", self.scratch / "empty")
         out = integrity.to_markdown(report)
         self.assertIn("# integrity imports", out)
-        self.assertIn("| level | code | file | message |", out)
+        self.assertIn("| level | code | file |", out)
+
+    def test_a_report_is_datable(self) -> None:
+        """A finding quoted elsewhere has to be checkable against the tree later."""
+        root = self.scratch / "tree"
+        write(root / "tests" / "containment.txt", "%s\n" % MARKER)
+        write(root / "a.md", MARKER + "\n")
+        report = integrity.run("containment", root)
+        self.assertTrue(str(report["generated"]).endswith("Z"))
+        self.assertTrue(str(report["findings"][0]["file_modified"]).endswith("Z"))
+        self.assertIn(report["generated"], integrity.to_markdown(report))
+
+    def test_a_finding_about_a_vanished_file_still_renders(self) -> None:
+        root = self.scratch / "tree"
+        write(root / "tests" / "containment.txt", "%s\n" % MARKER)
+        target = write(root / "a.md", MARKER + "\n")
+        stale = integrity.run("containment", root)
+        target.unlink()
+        fresh = integrity.run("containment", root)
+        self.assertIn("file_modified", stale["findings"][0])
+        self.assertEqual(fresh["findings"], [])
+        self.assertIn("| level | code | file |", integrity.to_markdown(stale))
+
+    def test_a_clean_report_still_carries_the_scan_time(self) -> None:
+        root = self.scratch / "tree"
+        write(root / "tests" / "containment.txt", "%s\n" % MARKER)
+        write(root / "clean.md", "nothing forbidden\n")
+        report = integrity.run("containment", root)
+        self.assertTrue(report["ok"])
+        self.assertIn(report["generated"], integrity.to_markdown(report))
 
     def test_every_named_check_is_runnable(self) -> None:
         root = self.scratch / "tree"

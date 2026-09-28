@@ -4,14 +4,7 @@ import unittest
 
 from kaios import doctor as doctor_mod
 from kaios import memory as memory_mod
-# Make the shared helper importable whether the runner puts this directory or
-# the repository root on sys.path.
-import os as _os
-import sys as _sys
-
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-
-from support import TempHomeCase, repo_root, write
+from tests.support import TempHomeCase, repo_root, write
 
 EXPECTED_CHECKS = (
     "python",

@@ -4,26 +4,19 @@ import json
 import unittest
 
 from kaios import ledger as ledger_mod
-# Make the shared helper importable whether the runner puts this directory or
-# the repository root on sys.path.
-import os as _os
-import sys as _sys
-
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-
-from support import TempHomeCase, read, write
+from tests.support import TempHomeCase, read, write
 
 
 class VersionTests(TempHomeCase):
     def setUp(self) -> None:
         super().setUp()
         self.root = self.fake_repo()
-        write(self.root / "KAIOS" / "VERSION", "1.2.3\n")
+        write(self.root / "SYSTEM" / "VERSION", "1.2.3\n")
 
     def test_version_reads_the_shipped_file(self) -> None:
         self.assertEqual(ledger_mod.version(self.paths, root=self.root), "1.2.3")
         self.assertEqual(
-            ledger_mod.version_file(self.paths, root=self.root), self.root / "KAIOS" / "VERSION"
+            ledger_mod.version_file(self.paths, root=self.root), self.root / "SYSTEM" / "VERSION"
         )
 
     def test_version_falls_back_to_a_flat_layout(self) -> None:
@@ -39,7 +32,7 @@ class VersionTests(TempHomeCase):
         result = ledger_mod.bump("patch", paths=self.paths, root=self.root)
         self.assertEqual(result["previous"], "1.2.3")
         self.assertEqual(result["version"], "1.2.4")
-        self.assertEqual(read(self.root / "KAIOS" / "VERSION").strip(), "1.2.4")
+        self.assertEqual(read(self.root / "SYSTEM" / "VERSION").strip(), "1.2.4")
 
     def test_bump_minor_resets_patch(self) -> None:
         self.assertEqual(ledger_mod.bump("minor", paths=self.paths, root=self.root)["version"], "1.3.0")
@@ -50,10 +43,10 @@ class VersionTests(TempHomeCase):
     def test_bump_refuses_an_unknown_part(self) -> None:
         with self.assertRaises(ValueError):
             ledger_mod.bump("epoch", paths=self.paths, root=self.root)
-        self.assertEqual(read(self.root / "KAIOS" / "VERSION").strip(), "1.2.3")
+        self.assertEqual(read(self.root / "SYSTEM" / "VERSION").strip(), "1.2.3")
 
     def test_bump_refuses_a_malformed_version(self) -> None:
-        write(self.root / "KAIOS" / "VERSION", "one point two\n")
+        write(self.root / "SYSTEM" / "VERSION", "one point two\n")
         with self.assertRaises(ValueError):
             ledger_mod.bump("patch", paths=self.paths, root=self.root)
 

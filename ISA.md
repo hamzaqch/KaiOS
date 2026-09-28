@@ -5,7 +5,7 @@ task: "Build KaiOS: a full harness of the reference class for Copilot in VS Code
 slug: kaios
 started: 2026-09-28T00:00:00Z
 updated: 2026-09-28T00:00:00Z
-principal_stated_goal: "[held verbatim in the private task ISA; it names the reference system, which must not ship in this repo]"
+stated_goal: "[held verbatim in the private task ISA; it names the reference system, which must not ship in this repo]"
 ---
 
 # KaiOS — work-only AI operating system for Copilot in VS Code
@@ -88,7 +88,7 @@ Why: Copilot exposes several vendors; the value is using each where it is strong
 - [ ] ISC-24: at least 9 agents: Kai (orchestrator, max), Planner (max), Builder (high), Reviewer (max, fresh context), Auditor (cross, read-only), Gemini-seat third opinion (third), Researcher (research), Setup (max), DatabricksOps (high), Verifier (high). Each has `tools`, `model`, `description`, and a `# kaios-role:` line. Falsifier: `tests/test_agents.py`.
 - [ ] ISC-25: Kai can dispatch subagents: its `agents:` list names Planner, Builder, Reviewer, Auditor, Researcher, Verifier and its `tools` include `agent`. Falsifier: frontmatter check.
 - [ ] ISC-26: the Council skill seats one agent per vendor family present in the registry and its SKILL.md documents the rule that a second look is always a different family from the builder. Falsifier: grep.
-- [ ] ISC-27: `SYSTEM/DOCUMENTATION/ModelRouting.md` explains the role rungs and which vendor is used for what, with the falsifier that no model name appears in any doctrine prose outside `models.json`. Falsifier: grep model names in `SYSTEM/**.md` and `.github/copilot-instructions.md`.
+- [ ] ISC-27: `SYSTEM/DOCUMENTATION/ModelRouting.md` explains the role rungs and which vendor is used for what, with the falsifier that no model name appears in any doctrine prose outside `models.json`. Falsifier: grep model names in `SYSTEM/**.md`, `.github/copilot-instructions.md`, instructions, skills, and agent bodies; the rendered `model:` frontmatter line in agents is the registry's output and is exempt.
 
 ### F5 · Python core
 Why: deterministic tools are what let hooks and skills do real work without a runtime the workplace cannot install.
@@ -105,7 +105,7 @@ Why: the first run must install KaiOS itself, link what the user has, and learn 
 - [ ] ISC-33: `Install.ps1` copies agents, skills, hooks, instructions to `~/.copilot/*` (path overridable), creates `KAIOS_HOME`, renders absolute paths into the user-level hook JSON, and is idempotent (second run changes nothing). Falsifier: run twice under pwsh with a temp HOME and diff.
 - [ ] ISC-34: `Init-Workspace.ps1 <repo>` creates `.github/{copilot-instructions.md,instructions,agents,skills,hooks}` and `.vscode/mcp.json` in the target only when absent, never overwriting. Falsifier: run on a repo with an existing file.
 - [ ] ISC-35: `kaios setup detect` reports python, git, gh, databricks CLI, VS Code, PowerShell versions and presence of `.vscode/mcp.json` entries, each `found|missing`, never failing when something is missing. Falsifier: run on this machine.
-- [ ] ISC-36: the `kaios-setup` skill plus Setup agent run an interview that writes `USER/PROFILE.md`, `USER/PROJECTS.md`, per-project `.instructions.md`, a project `ISA.md` seed, and `CONFIG/config.json` with optional flags for MCP servers (GitHub, Databricks), Databricks CLI profile, and API keys stored only as env-var names. Falsifier: rendered outputs from a fixture answers file via `kaios setup render --answers fixture.json`.
+- [ ] ISC-36: the `kaios-setup` skill plus Setup agent run an interview that writes `USER/PROFILE.md`, `USER/PROJECTS.md`, per-project `.instructions.md`, a project `ISA.md` seed, and `CONFIG/config.json` with optional flags for MCP servers (GitHub, Databricks), Databricks CLI profile, and API keys stored only as env-var names. Falsifier: `kaios setup write-config fixture.json` then `kaios setup render` on a fresh home produces every listed file.
 - [ ] ISC-37: `README.md` gives a five-minute install, the hook probe, the setup command, and a table of what is optional. Falsifier: grep for each section.
 
 ### F7 · Databricks (optional)
@@ -142,6 +142,7 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 - D3: Doctrine is rewritten, never copied, to guarantee zero personal residue.
 - D4: Dashboard dropped per principal; observability is the ISA plus JSONL logs.
 - D5: doctrine tree renamed `KAIOS/` → `SYSTEM/` because it collided with the `kaios/` package on case-insensitive filesystems (Windows, macOS). Found by the core builder before any Windows checkout existed.
+- D8: the ISA goal field is `stated_goal` everywhere (template, parser, doctrine); the longer spelling was dropped so the shipped format carries no principal wording.
 - D7: `tests/` is a package (`__init__.py`) so stdlib discovery finds every test; test modules import helpers as `from tests.support import …`. Found when discovery reported 0 tests.
 - D6: the verbatim goal names the reference system, so it is held in a private task ISA outside the repo; the shipped ISA carries a paraphrase. Containment (ISC-2) outranks verbatim-in-repo.
 
