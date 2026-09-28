@@ -1,0 +1,23 @@
+{
+  "$schema": "kaios-hooks-v1",
+  "version": "1.0.0",
+  "generated": "{{now}}",
+  "cwd": "{{repo}}",
+  "hooks": {
+    "{{event}}": [
+      {
+        "type": "command",
+        "command": "{{python}} -m kaios.hooks {{event}}",
+        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File {{wrapper}} {{event}}",
+        "timeout": 20,
+        "env": {
+          "PYTHONPATH": "{{repo}}",
+          "KAIOS_HOME": "{{home}}"
+        }
+      }
+    ]
+  },
+  "x-kaios": {
+    "note": "Template. The single {{event}} entry is the shape; `kaios setup render` expands it across every registered event and writes absolute paths."
+  }
+}

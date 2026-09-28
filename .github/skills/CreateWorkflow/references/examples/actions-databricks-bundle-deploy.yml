@@ -1,0 +1,33 @@
+name: Bundle deploy
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Set up the Databricks CLI
+        uses: databricks/setup-cli@main
+      - name: Validate the bundle
+        run: databricks bundle validate -t dev
+        env:
+          DATABRICKS_HOST: "${{ vars.DATABRICKS_HOST }}"
+          DATABRICKS_TOKEN: "${{ secrets.DATABRICKS_TOKEN }}"
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Set up the Databricks CLI
+        uses: databricks/setup-cli@main
+      - name: Deploy the bundle
+        run: databricks bundle deploy -t prod
+        env:
+          DATABRICKS_HOST: "${{ vars.DATABRICKS_HOST }}"
+          DATABRICKS_TOKEN: "${{ secrets.DATABRICKS_TOKEN }}"

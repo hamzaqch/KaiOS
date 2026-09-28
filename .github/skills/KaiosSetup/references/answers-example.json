@@ -1,0 +1,66 @@
+{
+  "version": "1.0.0",
+  "user": {
+    "name": "example-user",
+    "role": "Data engineer",
+    "team": "Finance Data Platform",
+    "stack": ["Python", "SQL", "PowerShell", "Databricks", "Azure DevOps"]
+  },
+  "models": {
+    "max": ["<top reasoning model enabled in the picker>"],
+    "high": ["<mid-tier model enabled in the picker>"],
+    "medium": ["<small fast model enabled in the picker>"],
+    "cross": ["<a model from a different vendor than max>"],
+    "third": ["<a model from a third vendor, if one is enabled>"],
+    "research": ["<the model best at long documents>"]
+  },
+  "optional": {
+    "mcp": {
+      "github": true,
+      "databricks": false
+    },
+    "databricks_cli": {
+      "enabled": true,
+      "profile": "work-dev"
+    },
+    "apis": {
+      "jira": {
+        "env_var": "JIRA_API_TOKEN",
+        "purpose": "read ticket titles when a branch name carries a ticket id"
+      },
+      "confluence": {
+        "env_var": "CONFLUENCE_TOKEN",
+        "purpose": "fetch a runbook page referenced from a README"
+      }
+    }
+  },
+  "projects": [
+    {
+      "name": "invoice-export",
+      "path": "C:\\src\\invoice-export",
+      "url": "https://dev.azure.com/example-org/finance/_git/invoice-export",
+      "deploy": "databricks bundle deploy --target dev",
+      "stack": ["Python", "Databricks asset bundle", "SQL"],
+      "aliases": ["the export", "nightly export", "invoices"],
+      "purpose": "Nightly invoice extract written to the finance share, with row count parity and failure alerting.",
+      "done_means": "The dated file exists, the row count matches the source, and a failure alerts the owning channel naming the failing step.",
+      "pain_points": [
+        "Reruns used to duplicate a day's file.",
+        "Schema drift in the source shows up as a silent count mismatch."
+      ]
+    },
+    {
+      "name": "platform-scripts",
+      "path": "C:\\src\\platform-scripts",
+      "url": "",
+      "deploy": "",
+      "stack": ["PowerShell", "Python"],
+      "aliases": ["the scripts", "tooling"],
+      "purpose": "Shared operational scripts the team runs by hand on Windows.",
+      "done_means": "The script runs clean on a fresh checkout under Windows PowerShell 5.1 and its usage is in the README.",
+      "pain_points": [
+        "Scripts written on a newer shell fail on 5.1 in ways nobody catches until someone else runs them."
+      ]
+    }
+  ]
+}

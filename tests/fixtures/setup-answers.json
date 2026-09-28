@@ -1,0 +1,47 @@
+{
+  "optional": {
+    "mcp": {
+      "github": true,
+      "databricks": false
+    },
+    "databricks_cli": {
+      "enabled": true,
+      "profile": "work"
+    },
+    "apis": {
+      "tracker": {
+        "env_var": "TRACKER_API_TOKEN"
+      }
+    }
+  },
+  "user": {
+    "name": "Team Member",
+    "role": "Data platform engineer",
+    "team": "Platform",
+    "stack": ["Python", "SQL", "PowerShell"],
+    "preferences": [
+      "Say what was verified and what was not.",
+      "Show the command, not a summary of the command."
+    ]
+  },
+  "projects": [
+    {
+      "name": "Ingest Pipeline",
+      "path": "work/ingest-pipeline",
+      "url": "https://example.invalid/ingest",
+      "deploy": "databricks bundle deploy -t dev",
+      "stack": ["Python", "SQL"],
+      "aliases": ["the pipeline", "ingest"],
+      "goal": "Every nightly load lands complete and is proven complete by a row-count check.",
+      "rules": ["Never deploy to prod without being asked."]
+    },
+    {
+      "name": "Report Tool",
+      "path": "work/report-tool",
+      "url": "",
+      "deploy": "",
+      "stack": ["Python"],
+      "aliases": ["reports"]
+    }
+  ]
+}

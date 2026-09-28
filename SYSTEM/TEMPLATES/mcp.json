@@ -1,0 +1,28 @@
+{
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "x-kaios": {
+        "flag": "github",
+        "optional": true,
+        "note": "Hosted GitHub MCP server. Requires nothing installed locally; the editor handles authorization."
+      }
+    },
+    "databricks": {
+      "type": "stdio",
+      "command": "databricks",
+      "args": ["experimental", "mcp"],
+      "x-kaios": {
+        "flag": "databricks",
+        "optional": true,
+        "placeholder": true,
+        "note": "Placeholder. Confirm the subcommand your installed CLI version exposes before enabling, and that your workplace permits it."
+      }
+    }
+  },
+  "x-kaios": {
+    "convention": "kaios-mcp-v1",
+    "note": "Template. `kaios setup render` keeps only the servers flagged true in CONFIG/config.json under optional.mcp, and strips every x-kaios marker from the rendered file."
+  }
+}

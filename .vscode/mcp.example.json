@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    },
+    "databricks": {
+      "type": "stdio",
+      "command": "databricks",
+      "args": ["mcp", "serve"],
+      "env": {
+        "DATABRICKS_CONFIG_PROFILE": "DEFAULT"
+      }
+    }
+  }
+}

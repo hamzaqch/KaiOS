@@ -1,0 +1,35 @@
+{
+  "kind": "databricks",
+  "name": "nightly_ingest",
+  "bundle_name": "analytics_pipelines",
+  "job_name": "Nightly ingest",
+  "tasks": [
+    {
+      "task_key": "land_raw",
+      "type": "notebook",
+      "notebook_path": "../notebooks/land_raw.py",
+      "depends_on": []
+    },
+    {
+      "task_key": "build_silver",
+      "type": "notebook",
+      "notebook_path": "../notebooks/build_silver.py",
+      "depends_on": ["land_raw"]
+    },
+    {
+      "task_key": "publish_gold",
+      "type": "python_wheel",
+      "package_name": "analytics_jobs",
+      "entry_point": "publish_gold",
+      "depends_on": ["build_silver"]
+    }
+  ],
+  "schedule": {
+    "quartz_cron_expression": "0 30 2 * * ?",
+    "timezone_id": "UTC"
+  },
+  "email_notifications": {
+    "on_failure": ["data-platform-oncall@example.com"]
+  },
+  "max_concurrent_runs": 1
+}

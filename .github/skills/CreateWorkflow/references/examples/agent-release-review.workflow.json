@@ -1,0 +1,76 @@
+{
+  "name": "ReleaseReview",
+  "version": "1.0.0",
+  "goal": "Take a change from an articulated plan to a reviewed, verified release candidate without any stage grading its own work.",
+  "kind": "agent",
+  "stages": [
+    {
+      "id": "plan",
+      "title": "Write done down",
+      "agent": "Planner",
+      "role": "max",
+      "input": "the change request, as an issue or a prompt",
+      "output": "an ISA whose claims are falsifiable",
+      "done_criteria": [
+        "Every claim in the ISA names the probe that closes it.",
+        "At least one anti-claim states what must not become true."
+      ],
+      "gate": "ask",
+      "after": []
+    },
+    {
+      "id": "build",
+      "title": "Take the frontier claims",
+      "agent": "Builder",
+      "role": "high",
+      "input": "the ISA from the plan stage",
+      "output": "a working tree that takes the claims on the frontier",
+      "done_criteria": [
+        "Every claim taken this pass has a code change behind it.",
+        "The test suite ran and its output is captured verbatim."
+      ],
+      "gate": "auto",
+      "after": [
+        "plan"
+      ]
+    },
+    {
+      "id": "review",
+      "title": "Second look from another family",
+      "agent": "Auditor",
+      "role": "cross",
+      "input": "the diff plus the ISA",
+      "output": "a findings list ranked by severity",
+      "done_criteria": [
+        "Every finding names the file and the line it applies to.",
+        "The reviewing role is a different vendor family from the builder."
+      ],
+      "gate": "auto",
+      "after": [
+        "build"
+      ]
+    },
+    {
+      "id": "verify",
+      "title": "Close the claims on evidence",
+      "agent": "Verifier",
+      "role": "high",
+      "input": "the ISA and the reviewed tree",
+      "output": "an evidence trail, one entry per closed claim",
+      "done_criteria": [
+        "Each claim marked done quotes the command and its output.",
+        "No claim is closed on an assertion that it would pass."
+      ],
+      "gate": "evidence",
+      "after": [
+        "review"
+      ]
+    }
+  ],
+  "anti_claims": [
+    "No stage reports done for a criterion whose probe was never run.",
+    "The builder never reviews its own diff.",
+    "No claim is closed from memory of an earlier run."
+  ],
+  "state_file": "$KAIOS_HOME/MEMORY/STATE/workflows.json"
+}

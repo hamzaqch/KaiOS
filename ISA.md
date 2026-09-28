@@ -1,18 +1,18 @@
 ---
 phase: climbing
-progress: 0/38
-task: "Build KaiOS: full LifeOS-class harness for Copilot in VS Code"
+progress: 0/39
+task: "Build KaiOS: a full harness of the reference class for Copilot in VS Code"
 slug: kaios
 started: 2026-09-28T00:00:00Z
 updated: 2026-09-28T00:00:00Z
-principal_stated_goal: "crate a framwrok simiiler to lifeos with all the hooks, agent, skill, workflows that can be used in vscode we are only allowd to install python so eveything should be in powershell or vscode … FM should not include any lifeos or personal stuff should be for work only … i want to have all the hevry stuff include eveything from lifeos expect personal stuff … drop the dashboard, and biuld also name is KaiOS, copilot allowd us to use miltimple ai model clude, gemeni, chatgpt how we are going to utitlize them, also when user first time use it it's need to help user install it self and link all mcp and cli and api, eveything should be optional for mcp, databrick cli and api, review thse userr project by intreviing them to help them biuld tyhe fm"
+principal_stated_goal: "[held verbatim in the private task ISA; it names the reference system, which must not ship in this repo]"
 ---
 
 # KaiOS — work-only AI operating system for Copilot in VS Code
 
 ## Problem
 
-The principal's work environment is Windows, VS Code, GitHub Copilot, Python, and the Databricks CLI. Nothing else may be installed. Copilot out of the box has no doctrine, no articulated done-state, no verification gates, no memory, and no role-based use of the several models it exposes. The principal wants the full weight of a LifeOS-class harness there, with every personal element removed.
+The principal's work environment is Windows, VS Code, GitHub Copilot, Python, and the Databricks CLI. Nothing else may be installed. Copilot out of the box has no doctrine, no articulated done-state, no verification gates, no memory, and no role-based use of the several models it exposes. The principal wants the full weight of a harness of the reference class there, with every personal element removed.
 
 ## Vision
 
@@ -34,7 +34,7 @@ A teammate clones KaiOS, runs one PowerShell script, answers a short interview, 
 ## Constraints
 
 - Windows PowerShell 5.1 syntax in every `.ps1`; Python 3.10+ stdlib only.
-- Copilot-native discovery paths only (see `KAIOS/DOCUMENTATION/Blueprint.md`).
+- Copilot-native discovery paths only (see `SYSTEM/DOCUMENTATION/Blueprint.md`).
 - Zero personal or other-system content; `tests/containment.txt` is the falsifier.
 
 ## Goal
@@ -46,7 +46,7 @@ Ship KaiOS v1.0.0 at `~/code/KaiOS`: doctrine, 25+ hooks, 25+ skills, 8+ agents 
 ### F0 · Cross-cutting
 Why: the constraints that make it installable at work and safe to share with a team.
 
-- [ ] ISC-1: `python -m pytest tests -q` (or `python -m unittest`) passes with zero failures. Falsifier: any failing test.
+- [ ] ISC-1: `python -m unittest discover -s tests -t .` from the repo root passes with zero failures (stdlib runner; pytest is not assumed to exist at work). Falsifier: any failing test or zero tests discovered.
 - [ ] ISC-2: `tests/test_containment.py` greps the whole repo for every term in `tests/containment.txt` (personal names, home paths, the other system's name) and finds zero hits. Falsifier: one hit.
 - [ ] ISC-3: no `.py` file imports anything outside the standard library. Falsifier: `python -m kaios integrity imports` reports a non-stdlib import.
 - [ ] ISC-4: every `.ps1` parses under PowerShell 5.1 rules: `scripts/Test-PS51.ps1` runs the PS parser with 5.1-only tokens banned (`??`, `?:`, `&&`, `||` at statement level). Falsifier: parser error or banned token.
@@ -56,9 +56,9 @@ Why: the constraints that make it installable at work and safe to share with a t
 Why: Copilot needs the constitution, the Algorithm, and the verification rules loaded on every session, rewritten fresh with no personal residue.
 
 - [ ] ISC-6: `.github/copilot-instructions.md` exists, under 12k chars, contains the response format, the five constitutional rules (output format, verification, analysis-read-only, security protocol, self-healing), the Algorithm pointer, and the routing table. Falsifier: grep for each rule heading fails.
-- [ ] ISC-7: `KAIOS/ALGORITHM/LATEST` names a version whose file exists and states the run-complete claims (goal preserved, done written first, anti-claims, prerequisites probed, ambiguity resolved, evidence per claim, class sweep, ask fidelity, second look, trail, spend). Falsifier: any of those eleven ideas missing from the file.
-- [ ] ISC-8: `KAIOS/RULES/Verification.md`, `SelfHealing.md`, `Philosophy.md` exist, each with freshness frontmatter and at least the rule names of their originals (modality fidelity, defer on unavailable verifier, appearance ≠ existence, reproduce before fixing, temporal fidelity, restore parity, cache fidelity; routing table for where a rule lives; intent engineering + ideal-state prompting). Falsifier: grep.
-- [ ] ISC-9: `KAIOS/DOCUMENTATION/ISAFormat.md` defines the ISA sections, claim syntax, `(after:)` edges, anti-claims, fog, remaining work, and `kaios isa check` enforces it. Falsifier: a malformed ISA passes `check`.
+- [ ] ISC-7: `SYSTEM/ALGORITHM/LATEST` names a version whose file exists and states the run-complete claims (goal preserved, done written first, anti-claims, prerequisites probed, ambiguity resolved, evidence per claim, class sweep, ask fidelity, second look, trail, spend). Falsifier: any of those eleven ideas missing from the file.
+- [ ] ISC-8: `SYSTEM/RULES/Verification.md`, `SelfHealing.md`, `Philosophy.md` exist, each with freshness frontmatter and at least the rule names of their originals (modality fidelity, defer on unavailable verifier, appearance ≠ existence, reproduce before fixing, temporal fidelity, restore parity, cache fidelity; routing table for where a rule lives; intent engineering + ideal-state prompting). Falsifier: grep.
+- [ ] ISC-9: `SYSTEM/DOCUMENTATION/ISAFormat.md` defines the ISA sections, claim syntax, `(after:)` edges, anti-claims, fog, remaining work, and `kaios isa check` enforces it. Falsifier: a malformed ISA passes `check`.
 - [ ] ISC-10: at least 6 `.github/instructions/*.instructions.md` files with `applyTo` globs (python, tests, powershell, sql/notebooks, databricks bundles, markdown docs) and each under 4k chars. Falsifier: count or frontmatter.
 
 ### F2 · Hooks
@@ -84,11 +84,11 @@ Why: skills carry the thinking and domain capabilities that made the original he
 ### F4 · Agents and multi-model routing
 Why: Copilot exposes several vendors; the value is using each where it is strongest and never letting a builder grade its own work.
 
-- [ ] ISC-23: `KAIOS/CONFIG/models.json` defines roles max, high, medium, cross, third, research with prioritized model lists, and `kaios models apply` rewrites every agent's `model:` from it. Falsifier: change the registry, apply, diff agent files.
+- [ ] ISC-23: `SYSTEM/CONFIG/models.json` defines roles max, high, medium, cross, third, research with prioritized model lists, and `kaios models apply` rewrites every agent's `model:` from it. Falsifier: change the registry, apply, diff agent files.
 - [ ] ISC-24: at least 9 agents: Kai (orchestrator, max), Planner (max), Builder (high), Reviewer (max, fresh context), Auditor (cross, read-only), Gemini-seat third opinion (third), Researcher (research), Setup (max), DatabricksOps (high), Verifier (high). Each has `tools`, `model`, `description`, and a `# kaios-role:` line. Falsifier: `tests/test_agents.py`.
 - [ ] ISC-25: Kai can dispatch subagents: its `agents:` list names Planner, Builder, Reviewer, Auditor, Researcher, Verifier and its `tools` include `agent`. Falsifier: frontmatter check.
 - [ ] ISC-26: the Council skill seats one agent per vendor family present in the registry and its SKILL.md documents the rule that a second look is always a different family from the builder. Falsifier: grep.
-- [ ] ISC-27: `KAIOS/DOCUMENTATION/ModelRouting.md` explains the role rungs and which vendor is used for what, with the falsifier that no model name appears in any doctrine prose outside `models.json`. Falsifier: grep model names in `KAIOS/**.md` and `.github/copilot-instructions.md`.
+- [ ] ISC-27: `SYSTEM/DOCUMENTATION/ModelRouting.md` explains the role rungs and which vendor is used for what, with the falsifier that no model name appears in any doctrine prose outside `models.json`. Falsifier: grep model names in `SYSTEM/**.md` and `.github/copilot-instructions.md`.
 
 ### F5 · Python core
 Why: deterministic tools are what let hooks and skills do real work without a runtime the workplace cannot install.
@@ -96,7 +96,7 @@ Why: deterministic tools are what let hooks and skills do real work without a ru
 - [ ] ISC-28: `python -m kaios doctor` runs on a fresh `KAIOS_HOME` and reports every check with PASS/WARN/FAIL, exit 0 when nothing FAILs. Falsifier: run in a temp home.
 - [ ] ISC-29: `kaios isa scaffold/check/frontier/status/render/list` work against fixtures; `frontier` respects `(after:)` edges and tombstoned claims. Falsifier: `tests/test_isa.py`.
 - [ ] ISC-30: `kaios memory capture/search/digest/health/knowledge` write and read JSONL/Markdown under `KAIOS_HOME/MEMORY`; search finds a captured item by substring. Falsifier: `tests/test_memory.py`.
-- [ ] ISC-31: `kaios ledger version bump` updates `KAIOS/VERSION` and appends to the registry; `kaios ledger log` reads it back. Falsifier: `tests/test_ledger.py`.
+- [ ] ISC-31: `kaios ledger version bump` updates `SYSTEM/VERSION` and appends to the registry; `kaios ledger log` reads it back. Falsifier: `tests/test_ledger.py`.
 - [ ] ISC-32: `kaios integrity containment/docs/versions/imports` each return non-zero on a seeded violation. Falsifier: seeded fixtures.
 
 ### F6 · Setup and onboarding
@@ -113,6 +113,11 @@ Why: it is the one domain tool the workplace has; wrappers make it safe and scri
 
 - [ ] ISC-38: the `databricks` skill ships `databricks_tool.py` wrapping auth check, workspace ls, jobs list/run, bundle validate/deploy (prod behind ask), SQL query via CLI, notebook export; it uses `subprocess` with argument arrays, never shell strings, and exits cleanly with a clear message when the CLI is absent. Falsifier: run with CLI absent here; grep for `shell=True`.
 
+### F8 · Workflow builder
+Why: the principal asked (mid-build) for help building workflows; at work "workflow" means three different things and the builder must handle all of them.
+
+- [ ] ISC-39: the `create-workflow` skill plus `workflow_tool.py` interview the user to pick a kind (KaiOS multi-agent workflow, GitHub Actions workflow, Databricks job/bundle workflow), scaffold it (`workflow.json` spec + orchestrator `.agent.md` with handoffs; or `.github/workflows/<name>.yml`; or `resources/<name>.job.yml` bundle resource), validate it (`workflow_tool.py validate <file>` exits 1 on a malformed spec or YAML shape), and track runs in `$KAIOS_HOME/MEMORY/STATE/workflows.json`. Falsifier: scaffold each kind from a fixture answers file and validate; seeded broken spec fails.
+
 ## Anti-claims
 
 - A1: no file in the repo contains a personal name, home path, or the other system's name (ISC-2 is the probe).
@@ -128,7 +133,7 @@ Why: it is the one domain tool the workplace has; wrappers make it safe and scri
 | 2, 3, 32 | `python -m kaios integrity …` | bash |
 | 4, 12, 18, 33, 34 | `pwsh -File scripts/… ` | bash |
 | 6–10, 20, 26, 27, 37 | grep | bash |
-| 11, 13–17, 19, 21–25, 28–31, 35, 36, 38 | pytest modules | bash |
+| 11, 13–17, 19, 21–25, 28–31, 35, 36, 38, 39 | pytest modules | bash |
 
 ## Decisions
 
@@ -136,6 +141,9 @@ Why: it is the one domain tool the workplace has; wrappers make it safe and scri
 - D2: Model names live in one JSON registry; agents are rendered from it so a lineup change never edits prose.
 - D3: Doctrine is rewritten, never copied, to guarantee zero personal residue.
 - D4: Dashboard dropped per principal; observability is the ISA plus JSONL logs.
+- D5: doctrine tree renamed `KAIOS/` → `SYSTEM/` because it collided with the `kaios/` package on case-insensitive filesystems (Windows, macOS). Found by the core builder before any Windows checkout existed.
+- D7: `tests/` is a package (`__init__.py`) so stdlib discovery finds every test; test modules import helpers as `from tests.support import …`. Found when discovery reported 0 tests.
+- D6: the verbatim goal names the reference system, so it is held in a private task ISA outside the repo; the shipped ISA carries a paraphrase. Containment (ISC-2) outranks verbatim-in-repo.
 
 ## Not yet specified
 
@@ -145,3 +153,4 @@ Why: it is the one domain tool the workplace has; wrappers make it safe and scri
 ## Log
 
 - 2026-09-28: ISA scaffolded; build fan-out begins.
+- 2026-09-28: principal added "workflow builder" mid-run → F8/ISC-39; ⚠️ interpreting "workflow" as all three work meanings (KaiOS agent workflow, GitHub Actions, Databricks job).

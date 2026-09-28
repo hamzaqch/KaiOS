@@ -1,0 +1,10 @@
+bundle:
+  name: analytics_pipelines
+include:
+  - "resources/*.yml"
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production

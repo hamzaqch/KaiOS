@@ -1,0 +1,34 @@
+{
+  "convention": "kaios-models-v1",
+  "roles": {
+    "max": {
+      "purpose": "judgment, planning, review, audits, meta work",
+      "models": ["Claude Opus 4.5", "GPT-5.2"]
+    },
+    "high": {
+      "purpose": "execution of scoped work",
+      "models": ["Claude Sonnet 4.5", "GPT-5.2"]
+    },
+    "medium": {
+      "purpose": "trivial execution, formatting, summaries",
+      "models": ["GPT-5 mini", "Claude Haiku 4.5"]
+    },
+    "cross": {
+      "purpose": "second look from a different vendor family",
+      "models": ["GPT-5.2", "Gemini 2.5 Pro"]
+    },
+    "third": {
+      "purpose": "third-vendor opinion, very long context",
+      "models": ["Gemini 2.5 Pro"]
+    },
+    "research": {
+      "purpose": "web/doc research",
+      "models": ["Gemini 2.5 Pro", "GPT-5.2"]
+    }
+  },
+  "families": {
+    "anthropic": ["Claude"],
+    "openai": ["GPT", "o1", "o3", "o4"],
+    "google": ["Gemini"]
+  }
+}

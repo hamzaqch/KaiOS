@@ -1,3 +1,9 @@
+---
+version: 1.0.0
+last_updated: 2026-09-28T00:00:00Z
+convention: kaios-freshness-v1
+---
+
 # KaiOS Blueprint — the shared build contract
 
 > Every builder reads this first. It is the one place the repo layout, the CLI surface, the hook protocol, and the naming rules are defined. If a builder needs something not here, they add it here in the same change.
@@ -43,7 +49,7 @@ KaiOS/
     integrity.py                  # containment grep, doc cross-refs, version drift
     hooks/__init__.py  __main__.py  runner.py   # event dispatcher
     hooks/<event_snake>/<HookName>.py            # one hook per file
-  KAIOS/                          # doctrine + templates, installed to $KAIOS_HOME
+  SYSTEM/                         # doctrine + templates, installed to $KAIOS_HOME/SYSTEM (named SYSTEM, not KAIOS, because kaios/ and SYSTEM/ collide on Windows)
     ALGORITHM/LATEST, v1.0.0.md
     RULES/Verification.md SelfHealing.md Philosophy.md
     DOCUMENTATION/*.md
@@ -55,7 +61,7 @@ KaiOS/
 
 ## KAIOS_HOME (runtime state, never committed)
 
-`$env:KAIOS_HOME` (default `~/.kaios`) holds everything that changes at runtime:
+`$env:KAIOS_HOME` (default `~/.kaios`; the env var keeps its name) holds everything that changes at runtime:
 
 ```
 ~/.kaios/
@@ -68,7 +74,7 @@ KaiOS/
   MEMORY/KNOWLEDGE/*.md             # reusable facts, typed frontmatter
   MEMORY/LEARNING/REFLECTIONS/*.jsonl  INCIDENTS/*.md
   MEMORY/OBSERVABILITY/hook-events.jsonl  tool-events.jsonl  ask-fidelity.jsonl
-  KAIOS/                  # installed doctrine copy (ALGORITHM, RULES, TEMPLATES)
+  SYSTEM/                  # installed doctrine copy (ALGORITHM, RULES, TEMPLATES)
 ```
 
 Project ISAs live at `<repo>/ISA.md`. `kaios paths` prints all resolved paths as JSON.
@@ -91,7 +97,7 @@ Exit codes: 0 ok, 1 failure, 2 usage.
 
 ## Hook protocol
 
-`.github/hooks/kaios.json` registers all eight Copilot events. Each entry runs the same wrapper with the event name:
+`.github/hooks/kaios.json` is `{"version": 1, "hooks": {"<Event>": [ …entries… ]}}` and registers all eight Copilot events. Each entry runs the same wrapper with the event name:
 
 ```json
 { "type": "command",
@@ -107,7 +113,7 @@ The runner (`kaios/hooks/runner.py`):
 3. Merges results: `additionalContext` strings joined with blank lines; `permissionDecision` takes the most restrictive (`deny` > `ask` > `allow`); `continue` false if any says false; `updatedInput` last-writer.
 4. Prints one JSON object. On any hook exception: log it, never crash the harness, continue.
 
-Output shapes (Copilot-compatible, Claude-compatible):
+Output shapes (compatible with both hook dialects VS Code accepts):
 
 ```json
 { "continue": true, "additionalContext": "…" }
@@ -130,20 +136,9 @@ Input fields hooks may rely on, all optional: `hook_event_name`, `session_id`, `
 
 ## Multi-model routing
 
-Copilot exposes several vendors' models. KaiOS uses them by role, never by name in prose. `KAIOS/CONFIG/models.json`:
+Copilot exposes models from several vendor families. KaiOS uses them by ROLE, never by name in prose. The registry is `SYSTEM/CONFIG/models.json`: it maps six roles (`max` judgment/planning/review/audits, `high` execution of scoped work, `medium` trivial execution, `cross` second look from a different family than the builder, `third` third-vendor opinion and very long context, `research`) to prioritized model lists, plus a `families` map keyed by name prefix. Model names live ONLY in that file.
 
-```json
-{ "roles": {
-    "max":    { "purpose": "judgment, planning, review, audits, meta work", "models": ["Claude Opus 4.5", "GPT-5.2"] },
-    "high":   { "purpose": "execution of scoped work",                     "models": ["Claude Sonnet 4.5", "GPT-5.2"] },
-    "medium": { "purpose": "trivial execution, formatting, summaries",     "models": ["GPT-5 mini", "Claude Haiku 4.5"] },
-    "cross":  { "purpose": "second look from a different vendor family",   "models": ["GPT-5.2", "Gemini 2.5 Pro"] },
-    "third":  { "purpose": "third-vendor opinion, very long context",      "models": ["Gemini 2.5 Pro"] },
-    "research": { "purpose": "web/doc research",                           "models": ["Gemini 2.5 Pro", "GPT-5.2"] }
-} }
-```
-
-Each agent file carries `# kaios-role: <role>` on its first body line; `kaios models apply` rewrites its `model:` list from the registry. Setup lets the user pick from the models their org enabled. Council runs one seat per vendor. A second look is always a different family from the builder.
+Each agent file carries `<!-- kaios-role: <role> -->` as its first body line (the `# kaios-role:` spelling is also accepted); `python -m kaios models apply` rewrites its `model:` list from the registry. Setup lets the user pick from the models their org enabled. Council runs one seat per family. A second look is always a different family from the builder.
 
 ## Naming and style
 

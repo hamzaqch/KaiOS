@@ -1,0 +1,22 @@
+{
+  "installed_at": null,
+  "optional": {
+    "mcp": {
+      "github": false,
+      "databricks": false
+    },
+    "databricks_cli": {
+      "enabled": false,
+      "profile": null
+    },
+    "apis": {}
+  },
+  "models": {},
+  "user": {
+    "name": "",
+    "role": "",
+    "team": "",
+    "stack": []
+  },
+  "projects": []
+}

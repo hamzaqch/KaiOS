@@ -1,0 +1,10 @@
+{
+  "kind": "actions",
+  "name": "python-tests",
+  "display_name": "Python tests",
+  "template": "python-tests",
+  "python_version": "3.11",
+  "runs_on": "ubuntu-latest",
+  "branches": ["main"],
+  "test_command": "python -m unittest discover -s tests -v"
+}
