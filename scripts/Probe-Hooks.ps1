@@ -3,11 +3,16 @@
     Fires every registered hook event through the Windows wrapper.
 
 .DESCRIPTION
-    For each event in .github/hooks/kaios.json, pipes a sample event object
+    For each event key in .github/hooks/kaios.json, pipes a sample event object
     into .github/hooks/kaios.ps1 and checks two things: the wrapper exited 0,
     and what it wrote to stdout is parseable JSON. Those are the only two
     promises the chat harness depends on, and a wrapper that breaks either one
     can break a chat session.
+
+    The event names come from the registry, so the camelCase names the Copilot
+    CLI engine uses are the ones probed, and a sample is built in the dialect
+    that matches the key: camelCase keys get toolName and toolArgs, PascalCase
+    keys get tool_name and tool_input.
 
     The probe passes before the Python hook package exists. With no runner to
     call, the wrapper falls back to {"continue": true} and exits 0, which is
@@ -25,15 +30,17 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Only reached when the registry cannot be read: the file is the authority on
+# which names are registered and how they are spelled.
 $DefaultEvents = @(
-    'SessionStart',
-    'UserPromptSubmit',
-    'PreToolUse',
-    'PostToolUse',
+    'sessionStart',
+    'userPromptSubmitted',
+    'preToolUse',
+    'postToolUse',
     'PreCompact',
     'SubagentStart',
-    'SubagentStop',
-    'Stop'
+    'subagentStop',
+    'agentStop'
 )
 
 function Test-WindowsHost {
@@ -104,12 +111,27 @@ $rows = New-Object System.Collections.Generic.List[object]
 $failures = 0
 
 foreach ($name in $events) {
-    $sample = [ordered]@{
-        hook_event_name = $name
-        tool_name       = 'runCommands'
-        tool_input      = [ordered]@{ command = 'git status' }
-        prompt          = 'hello'
-        cwd             = $repoRoot
+    # A camelCase key is the Copilot CLI engine's spelling, and that engine sends
+    # camelCase fields too. Probing a camel key with snake_case fields would test
+    # a payload no engine ever sends.
+    $firstChar = $name.Substring(0, 1)
+    if ($firstChar -eq $firstChar.ToLowerInvariant()) {
+        $sample = [ordered]@{
+            sessionId = 'probe-session'
+            toolName  = 'bash'
+            toolArgs  = [ordered]@{ command = 'git status' }
+            prompt    = 'hello'
+            cwd       = $repoRoot
+        }
+    }
+    else {
+        $sample = [ordered]@{
+            hook_event_name = $name
+            tool_name       = 'runCommands'
+            tool_input      = [ordered]@{ command = 'git status' }
+            prompt          = 'hello'
+            cwd             = $repoRoot
+        }
     }
     $payload = $sample | ConvertTo-Json -Depth 5 -Compress
 

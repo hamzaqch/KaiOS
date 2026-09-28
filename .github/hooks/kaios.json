@@ -1,68 +1,74 @@
 {
   "version": 1,
   "hooks": {
-    "SessionStart": [
+    "sessionStart": [
       {
         "type": "command",
-        "command": "python3 -m kaios.hooks SessionStart",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 SessionStart",
-        "timeout": 20
+        "bash": "sh .github/hooks/kaios.sh sessionStart",
+        "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 sessionStart",
+        "timeoutSec": 20
       }
     ],
-    "UserPromptSubmit": [
+    "userPromptSubmitted": [
       {
         "type": "command",
-        "command": "python3 -m kaios.hooks UserPromptSubmit",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 UserPromptSubmit",
-        "timeout": 20
+        "bash": "sh .github/hooks/kaios.sh userPromptSubmitted",
+        "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 userPromptSubmitted",
+        "timeoutSec": 20
       }
     ],
-    "PreToolUse": [
+    "preToolUse": [
       {
         "type": "command",
-        "command": "python3 -m kaios.hooks PreToolUse",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 PreToolUse",
-        "timeout": 20
+        "bash": "sh .github/hooks/kaios.sh preToolUse",
+        "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 preToolUse",
+        "timeoutSec": 20
       }
     ],
-    "PostToolUse": [
+    "postToolUse": [
       {
         "type": "command",
-        "command": "python3 -m kaios.hooks PostToolUse",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 PostToolUse",
-        "timeout": 20
+        "bash": "sh .github/hooks/kaios.sh postToolUse",
+        "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 postToolUse",
+        "timeoutSec": 20
       }
     ],
     "PreCompact": [
       {
-        "type": "command",
-        "command": "python3 -m kaios.hooks PreCompact",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 PreCompact",
-        "timeout": 20
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 PreCompact",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "SubagentStart": [
       {
-        "type": "command",
-        "command": "python3 -m kaios.hooks SubagentStart",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 SubagentStart",
-        "timeout": 20
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 SubagentStart",
+            "timeout": 20
+          }
+        ]
       }
     ],
-    "SubagentStop": [
+    "subagentStop": [
       {
         "type": "command",
-        "command": "python3 -m kaios.hooks SubagentStop",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 SubagentStop",
-        "timeout": 20
+        "bash": "sh .github/hooks/kaios.sh subagentStop",
+        "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 subagentStop",
+        "timeoutSec": 20
       }
     ],
-    "Stop": [
+    "agentStop": [
       {
         "type": "command",
-        "command": "python3 -m kaios.hooks Stop",
-        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 Stop",
-        "timeout": 20
+        "bash": "sh .github/hooks/kaios.sh agentStop",
+        "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 agentStop",
+        "timeoutSec": 20
       }
     ]
   }

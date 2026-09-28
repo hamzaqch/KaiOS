@@ -155,8 +155,11 @@ foreach ($surface in $surfaces) {
     Remove-IfEmptyDirectory -Target $targetDir
 }
 
-$hookTarget = Join-KaiosPath -Base $CopilotHome -Relative 'hooks/kaios.json'
-Remove-KaiosItem -Target $hookTarget -Label 'hooks/kaios.json'
+# The registry and the two wrappers Install.ps1 puts beside it.
+foreach ($name in @('kaios.json', 'kaios.ps1', 'kaios.sh')) {
+    $candidate = Join-KaiosPath -Base $CopilotHome -Relative ('hooks/' + $name)
+    Remove-KaiosItem -Target $candidate -Label ('hooks/' + $name)
+}
 Remove-IfEmptyDirectory -Target (Join-KaiosPath -Base $CopilotHome -Relative 'hooks')
 
 # ----------------------------------------------------------------------------

@@ -85,8 +85,9 @@ KaiOS/
     instructions/*.instructions.md path-scoped rules with applyTo globs
     agents/*.agent.md              roles pinned to model rungs
     skills/<Name>/SKILL.md         capabilities, plus bundled tools
-    hooks/kaios.json               all eight chat events
+    hooks/kaios.json               all eight chat events, in both Copilot hook dialects
     hooks/kaios.ps1                Windows wrapper around the Python runner
+    hooks/kaios.sh                 the same wrapper for a POSIX host
   .vscode/
     mcp.json.template              rendered by setup
     mcp.example.json               what a configured registry looks like
@@ -130,6 +131,7 @@ Hooks never write to stderr and never exit non-zero; anything that goes wrong is
 | Symptom | Cause | Fix |
 |---|---|---|
 | Every command denied, hook shown as erroring | The workspace is not the KaiOS checkout and the `kaios` package could not be imported (first field report) | `git pull` in the KaiOS clone, re-run `Install.ps1` (it copies the package to `%KAIOS_HOME%\lib` and sets `KAIOS_REPO`), open a new VS Code window |
+| Message says the hook file must be repaired, tools blocked until then | The registry was in the wrong dialect for the Copilot CLI engine | `git pull`, re-run `Install.ps1`; the user-level copy lives at `%USERPROFILE%\.copilot\hooks\kaios.json` |
 | Hooks silent, no log lines | Hook files not discovered | Run `Chat: Configure Hooks`, confirm `chat.useHooks` is on and the workspace is trusted |
 | Need hooks off right now | | Set the user environment variable `KAIOS_HOOKS_DISABLED=1` and restart VS Code; every hook then answers `{"continue": true}` |
 

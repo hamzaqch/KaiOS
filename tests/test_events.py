@@ -239,16 +239,147 @@ class EventDirTests(unittest.TestCase):
 
 
 class RegistryShapeTests(unittest.TestCase):
-    def test_every_entry_names_its_event(self) -> None:
+    """Every command line in the registry dispatches the event it is filed under.
+
+    A wrapper invoked with the wrong event name runs the wrong hooks and nothing
+    reports it, because both the registry and the wrapper stay perfectly valid.
+    ``tests/test_registry_dialects.py`` owns the shape of these entries; this
+    checks only that each one names its own event.
+    """
+
+    def _command_lines(self, entry: dict) -> list:
+        nested = entry.get("hooks")
+        if isinstance(nested, list):
+            lines: list = []
+            for item in nested:
+                lines.extend(self._command_lines(item))
+            return lines
+        return [
+            str(value)
+            for key, value in entry.items()
+            if key in ("command", "windows", "bash", "powershell")
+        ]
+
+    def test_every_entry_dispatches_the_event_it_is_filed_under(self) -> None:
         data = json.loads((repo_root() / events_mod.REGISTRY_RELATIVE).read_text(encoding="utf-8"))
         for event, entries in data["hooks"].items():
             self.assertTrue(entries, "%s has no entries" % event)
             for entry in entries:
-                self.assertTrue(
-                    str(entry.get("command", "")).endswith(event),
-                    "%s entry does not dispatch %s" % (event, event),
-                )
-                self.assertTrue(str(entry.get("windows", "")).endswith(event))
+                lines = self._command_lines(entry)
+                self.assertTrue(lines, "%s entry carries no command line" % event)
+                for line in lines:
+                    self.assertTrue(
+                        line.endswith(" " + event),
+                        "%s entry dispatches something else: %s" % (event, line),
+                    )
+
+
+class RegistryNameTests(unittest.TestCase):
+    """The key spelling per event is written down once and used everywhere.
+
+    ``setup`` renders a user-level registry and ``Install.ps1`` renders another,
+    and both have to agree with the checked-in file about how each event is
+    spelled — a camelCase key both engines read, or a PascalCase key the Copilot
+    CLI engine reads under Claude semantics. Spelling one of them a second time
+    by hand is how the two dialects drifted apart to begin with.
+    """
+
+    def test_every_event_has_a_registry_spelling(self) -> None:
+        self.assertEqual(sorted(events_mod.REGISTRY_EVENT_NAMES), sorted(events_mod.EVENTS))
+
+    def test_every_spelling_canonicalizes_back_to_its_event(self) -> None:
+        for event, key in events_mod.REGISTRY_EVENT_NAMES.items():
+            self.assertEqual(events_mod.canonical(key), event, "failed on %r" % key)
+            self.assertEqual(events_mod.registry_key(event), key)
+
+    def test_the_checked_in_registry_uses_exactly_those_spellings(self) -> None:
+        data = json.loads((repo_root() / events_mod.REGISTRY_RELATIVE).read_text(encoding="utf-8"))
+        expected = [events_mod.REGISTRY_EVENT_NAMES[event] for event in events_mod.EVENTS]
+        self.assertEqual(list(data["hooks"].keys()), expected)
+
+    def test_the_nested_events_are_the_pascal_case_ones(self) -> None:
+        self.assertEqual(events_mod.NESTED_REGISTRY_EVENTS, ("PreCompact", "SubagentStart"))
+        for event in events_mod.NESTED_REGISTRY_EVENTS:
+            self.assertEqual(events_mod.REGISTRY_EVENT_NAMES[event], event)
+
+    def test_registry_keys_canonicalize_to_the_event_list_in_order(self) -> None:
+        """The drift guard, in the dialect the file is actually written in."""
+        found = events_mod.read_registry(repo_root() / events_mod.REGISTRY_RELATIVE)
+        self.assertEqual(list(found), list(events_mod.EVENTS))
+
+
+class CopilotDialectTests(unittest.TestCase):
+    """The Copilot CLI engine's event names have to reach our event list.
+
+    Its vocabulary is not ours: ``userPromptSubmitted`` and ``agentStop`` are the
+    same events under different names, and ``sessionEnd`` is an event it has and
+    we do not. Reading a registry written in that dialect as a file full of
+    unknown names is the failure that dropped every hook item in that engine and
+    blocked every tool call behind it.
+    """
+
+    def test_the_two_translated_names(self) -> None:
+        self.assertEqual(events_mod.canonical("userPromptSubmitted"), "UserPromptSubmit")
+        self.assertEqual(events_mod.canonical("agentStop"), "Stop")
+
+    def test_the_camel_case_names_that_are_only_case_variants(self) -> None:
+        for spelling, expected in (
+            ("sessionStart", "SessionStart"),
+            ("preToolUse", "PreToolUse"),
+            ("postToolUse", "PostToolUse"),
+            ("preCompact", "PreCompact"),
+            ("subagentStart", "SubagentStart"),
+            ("subagentStop", "SubagentStop"),
+        ):
+            self.assertEqual(events_mod.canonical(spelling), expected, "failed on %r" % spelling)
+
+    def test_an_event_that_engine_has_and_we_do_not_is_ignored(self) -> None:
+        self.assertIsNone(events_mod.canonical("sessionEnd"))
+        self.assertIsNone(events_mod.canonical("errorOccurred"))
+        self.assertIsNone(events_mod.canonical("postToolUseFailure"))
+
+
+class RegistryReadingTests(unittest.TestCase):
+    """``read_registry`` reads either dialect and reports our names."""
+
+    def setUp(self) -> None:
+        self._dir = tempfile.mkdtemp(prefix="kaios-dialect-")
+        self.scratch = Path(self._dir)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self._dir, ignore_errors=True)
+
+    def _write(self, data: dict) -> Path:
+        target = self.scratch / "kaios.json"
+        target.write_text(json.dumps(data), encoding="utf-8")
+        return target
+
+    def test_camel_case_keys_come_back_canonical(self) -> None:
+        target = self._write({"hooks": {"preToolUse": [{}], "agentStop": [{}]}})
+        self.assertEqual(events_mod.read_registry(target), ("PreToolUse", "Stop"))
+
+    def test_a_claude_nested_entry_is_accepted(self) -> None:
+        target = self._write(
+            {"hooks": {"PreCompact": [{"hooks": [{"type": "command", "command": "x"}]}]}}
+        )
+        self.assertEqual(events_mod.read_registry(target), ("PreCompact",))
+
+    def test_two_spellings_of_one_event_count_once(self) -> None:
+        target = self._write({"hooks": {"Stop": [{}], "agentStop": [{}]}})
+        self.assertEqual(events_mod.read_registry(target), ("Stop",))
+
+    def test_an_event_we_do_not_have_is_skipped_not_fatal(self) -> None:
+        target = self._write({"hooks": {"sessionEnd": [{}], "preToolUse": [{}]}})
+        self.assertEqual(events_mod.read_registry(target), ("PreToolUse",))
+
+    def test_a_registry_of_nothing_we_know_raises(self) -> None:
+        target = self._write({"hooks": {"sessionEnd": [{}], "notAnEvent": [{}]}})
+        with self.assertRaises(ValueError):
+            events_mod.read_registry(target)
+
+    def test_an_event_registered_with_no_entries_registers_nothing(self) -> None:
+        target = self._write({"hooks": {"preToolUse": [], "agentStop": [{}]}})
+        self.assertEqual(events_mod.read_registry(target), ("Stop",))
 
 
 if __name__ == "__main__":

@@ -23,7 +23,15 @@ _WRITE_TOKENS = ("edit", "write", "create", "patch", "replace", "insert", "noteb
 _PATH_KEYS = ("filePath", "file_path", "path", "filename", "file", "uri", "notebook_path")
 _CONTENT_KEYS = ("content", "newString", "new_string", "text", "code", "patch", "edits")
 _PROMPT_KEYS = ("prompt", "user_prompt", "message", "userPrompt", "text")
-_RESULT_KEYS = ("tool_response", "tool_result", "toolResponse", "output", "result", "stdout")
+_RESULT_KEYS = (
+    "tool_response",
+    "tool_result",
+    "toolResponse",
+    "toolResult",
+    "output",
+    "result",
+    "stdout",
+)
 
 
 def tool_name(event: dict) -> str:
@@ -35,7 +43,9 @@ def tool_name(event: dict) -> str:
 
 
 def tool_input(event: dict) -> dict:
-    for key in ("tool_input", "toolInput", "input", "arguments", "params"):
+    # ``toolArgs`` is the Copilot CLI engine's name for this; without it every
+    # guard sees an argument-less tool call and waves the call through.
+    for key in ("tool_input", "toolInput", "toolArgs", "input", "arguments", "params"):
         value = event.get(key)
         if isinstance(value, dict):
             return value

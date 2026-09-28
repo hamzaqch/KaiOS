@@ -34,8 +34,9 @@ KaiOS/
     instructions/*.instructions.md # path-scoped rules (applyTo globs)
     agents/*.agent.md             # roles pinned to model rungs
     skills/<Name>/SKILL.md        # capabilities (+ bundled scripts/, references/)
-    hooks/kaios.json              # all 8 events → one runner
+    hooks/kaios.json              # all 8 events → one runner, in both Copilot dialects
     hooks/kaios.ps1               # Windows wrapper: stdin → python -m kaios.hooks <Event>
+    hooks/kaios.sh                # the same wrapper for a POSIX host
   .vscode/mcp.json.template       # optional MCP servers, rendered by setup
   kaios/                          # Python package (stdlib only)
     __main__.py  cli.py           # `python -m kaios <command>`
@@ -97,14 +98,24 @@ Exit codes: 0 ok, 1 failure, 2 usage.
 
 ## Hook protocol
 
-`.github/hooks/kaios.json` is `{"version": 1, "hooks": {"<Event>": [ …entries… ]}}` and registers all eight Copilot events. Each entry runs the same wrapper with the event name:
+`.github/hooks/kaios.json` is `{"version": 1, "hooks": {"<event>": [ …entries… ]}}` and registers all eight Copilot events. Copilot has **two** hook engines with different dialects, and the file has to satisfy both, so it carries two entry shapes — full reasoning and the per-event table in `Hooks.md` § Two Copilot engines, one registry. Six events use the Copilot CLI engine's camelCase key with a flat entry:
 
 ```json
 { "type": "command",
-  "command": "python3 -m kaios.hooks SessionStart",
-  "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 SessionStart",
-  "timeout": 20 }
+  "bash": "sh .github/hooks/kaios.sh preToolUse",
+  "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 preToolUse",
+  "timeoutSec": 20 }
 ```
+
+`PreCompact` and `SubagentStart` have no camelCase name in that engine, so they ship PascalCase in the Claude nested shape, which the VS Code engine reads natively and the CLI engine reads under Claude semantics:
+
+```json
+{ "hooks": [ { "type": "command",
+               "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .github/hooks/kaios.ps1 PreCompact",
+               "timeout": 20 } ] }
+```
+
+Read the file through `kaios.events.read_registry`, which canonicalizes either dialect to the eight names in `EVENTS`. Never normalise the keys or the shapes when rendering a copy — that is what makes one of the two engines unable to read it.
 
 The runner (`kaios/hooks/runner.py`):
 
@@ -113,15 +124,18 @@ The runner (`kaios/hooks/runner.py`):
 3. Merges results: `additionalContext` strings joined with blank lines; `permissionDecision` takes the most restrictive (`deny` > `ask` > `allow`); `continue` false if any says false; `updatedInput` last-writer.
 4. Prints one JSON object. On any hook exception: log it, never crash the harness, continue.
 
-Output shapes (compatible with both hook dialects VS Code accepts):
+Output carries every decision in both dialects, because each engine reads its own keys and ignores the other's:
 
 ```json
 { "continue": true, "additionalContext": "…" }
-{ "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "…" } }
-{ "continue": false, "stopReason": "…" }
+{ "permissionDecision": "deny", "permissionDecisionReason": "…",
+  "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "…" } }
+{ "continue": false, "stopReason": "…", "decision": "block", "reason": "…" }
 ```
 
-Input fields hooks may rely on, all optional: `hook_event_name`, `session_id`, `cwd`, `timestamp`, `tool_name`, `tool_input` (dict; for shell tools look for `command`; for edit tools `filePath`/`file_path`, `content`/`newString`), `tool_response`, `prompt`/`user_prompt`, `stop_hook_active`. Always `event.get(...)`.
+`decision` appears only on a block. A `preToolUse` hook that errors, crashes or exits non-zero **fails closed** in the CLI engine and denies the tool call, which is why the wrappers always print JSON and always exit 0.
+
+Input fields hooks may rely on, all optional and in either dialect: `hook_event_name`, `session_id`/`sessionId`, `cwd`, `timestamp`, `tool_name`/`toolName`, `tool_input`/`toolArgs` (dict; for shell tools look for `command`; for edit tools `filePath`/`file_path`, `content`/`newString`), `tool_response`/`toolResult`, `prompt`/`user_prompt`, `stop_hook_active`. Always `event.get(...)`, and always through `kaios/hooks/util.py` rather than by hand.
 
 `Context` gives: `home` (KAIOS_HOME), `repo` (git root of cwd or None), `config` (dict), `active_isa` (path or None), `now`.
 

@@ -18,12 +18,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import isa as isa_mod
-from .events import EVENTS, REGISTRY_RELATIVE
+from .events import (
+    EVENTS,
+    NESTED_REGISTRY_EVENTS,
+    REGISTRY_EVENT_NAMES,
+    REGISTRY_RELATIVE,
+    registered_events,
+)
 from .paths import Paths
 
 PROBE_TIMEOUT = 10
 COPILOT_DIRS = ("agents", "skills", "hooks", "instructions")
 WRAPPER_RELATIVE = ".github/hooks/kaios.ps1"
+SHELL_WRAPPER_RELATIVE = ".github/hooks/kaios.sh"
 
 #: The checked-in registry path. Defined once, in ``kaios.events``.
 HOOKS_REGISTRY_RELATIVE = REGISTRY_RELATIVE
@@ -516,16 +523,68 @@ def _absolute_windows(command: str, wrapper: Path) -> str:
     return command
 
 
-def render_hooks(paths: Paths, python: str | None = None, wrapper: str | None = None) -> tuple[str, dict]:
+def _absolute_bash(command: str, wrapper: Path) -> str:
+    """Rewrite the path a ``sh <path> <Event>`` line runs to an absolute one."""
+    parts = str(command or "").split()
+    for index, token in enumerate(parts):
+        if Path(token).name.lower() in ("sh", "bash", "sh.exe", "bash.exe"):
+            if index + 1 < len(parts):
+                parts[index + 1] = str(wrapper)
+                return " ".join(parts)
+            return command
+    return command
+
+
+def _absolute_entry(entry: dict, interpreter: str, wrapper: Path, shell_wrapper: Path) -> dict:
+    """One registry entry with every wrapper path in it made absolute.
+
+    Both entry shapes pass through here. A flat entry carries the command lines
+    the Copilot CLI engine reads under ``bash`` and ``powershell``; a Claude
+    nested entry carries one under ``hooks[].command``. ``command`` and
+    ``windows`` are the older flat spellings and are still rewritten, so a
+    hand-edited registry in the previous shape still renders correctly.
+    """
+    out = dict(entry or {})
+    nested = out.get("hooks")
+    if isinstance(nested, list):
+        out["hooks"] = [
+            _absolute_entry(item, interpreter, wrapper, shell_wrapper)
+            if isinstance(item, dict)
+            else item
+            for item in nested
+        ]
+        return out
+    if "command" in out:
+        line = _absolute_command(out["command"], interpreter)
+        out["command"] = _absolute_windows(line, wrapper)
+    if "windows" in out:
+        out["windows"] = _absolute_windows(out["windows"], wrapper)
+    if "powershell" in out:
+        out["powershell"] = _absolute_windows(out["powershell"], wrapper)
+    if "bash" in out:
+        out["bash"] = _absolute_bash(out["bash"], shell_wrapper)
+    return out
+
+
+def render_hooks(
+    paths: Paths,
+    python: str | None = None,
+    wrapper: str | None = None,
+    shell_wrapper: str | None = None,
+) -> tuple[str, dict]:
     """The user-level hook registry, with absolute paths for this machine.
 
     The checked-in ``.github/hooks/kaios.json`` is the source of truth when it
-    exists: its events, entry shape and timeouts are preserved and only the
-    interpreter and wrapper paths become absolute. The shipped template is the
-    fallback for an install with no checkout beside it.
+    exists: its event keys, entry shapes and timeouts are preserved exactly, and
+    only the wrapper paths become absolute. That matters more than it sounds —
+    the key spelling and the entry shape are what decide whether each of
+    Copilot's two hook engines can read the file at all, so rendering must not
+    normalise either. The shipped template is the fallback for an install with no
+    checkout beside it.
     """
     repo = paths.repo or Path(__file__).resolve().parent.parent
     wrapper_path = Path(wrapper) if wrapper else (repo / WRAPPER_RELATIVE)
+    shell_path = Path(shell_wrapper) if shell_wrapper else (repo / SHELL_WRAPPER_RELATIVE)
     interpreter = python or sys.executable or "python"
 
     source = repo_hooks_registry(paths)
@@ -537,15 +596,16 @@ def render_hooks(paths: Paths, python: str | None = None, wrapper: str | None = 
         for event, entries in data["hooks"].items():
             rendered = []
             for entry in entries or []:
-                out = dict(entry or {})
-                if "command" in out:
-                    out["command"] = _absolute_command(out["command"], interpreter)
-                if "windows" in out:
-                    out["windows"] = _absolute_windows(out["windows"], wrapper_path)
-                env = dict(out.get("env") or {})
-                env.setdefault("PYTHONPATH", str(repo))
-                env.setdefault("KAIOS_HOME", str(paths.home))
-                out["env"] = env
+                out = _absolute_entry(entry or {}, interpreter, wrapper_path, shell_path)
+                # ``env`` belongs to the Copilot CLI engine's own entry schema, so
+                # it goes on flat entries only. A Claude nested entry has no such
+                # field, and the wrappers find the package from KAIOS_REPO or
+                # KAIOS_HOME without it.
+                if "hooks" not in out:
+                    env = dict(out.get("env") or {})
+                    env.setdefault("PYTHONPATH", str(repo))
+                    env.setdefault("KAIOS_HOME", str(paths.home))
+                    out["env"] = env
                 rendered.append(out)
             hooks[event] = rendered
         data["hooks"] = hooks
@@ -553,7 +613,6 @@ def render_hooks(paths: Paths, python: str | None = None, wrapper: str | None = 
         data["cwd"] = str(repo)
         data["generated"] = now_iso()
         data.pop("x-kaios", None)
-        events = sorted(hooks.keys())
     else:
         filled = _json_fill(
             _template(paths, "hooks.json"),
@@ -563,20 +622,26 @@ def render_hooks(paths: Paths, python: str | None = None, wrapper: str | None = 
                 "repo": str(repo),
                 "home": str(paths.home),
                 "wrapper": str(wrapper_path),
+                "shell_wrapper": str(shell_path),
             },
         )
         data = json.loads(filled)
         data.pop("x-kaios", None)
-        pattern = (data.get("hooks") or {}).get("{{event}}")
-        if pattern is None:
-            raise ValueError("hooks.json template lost its {{event}} entry")
+        patterns = data.get("hooks") or {}
+        flat = patterns.get("{{event}}")
+        nested = patterns.get("{{nested_event}}")
+        if flat is None or nested is None:
+            raise ValueError("hooks.json template lost its {{event}} entries")
         expanded: dict = {}
         for event in EVENTS:
-            expanded[event] = json.loads(json.dumps(pattern).replace("{{event}}", event))
+            key = REGISTRY_EVENT_NAMES[event]
+            pattern = nested if event in NESTED_REGISTRY_EVENTS else flat
+            marker = "{{nested_event}}" if event in NESTED_REGISTRY_EVENTS else "{{event}}"
+            expanded[key] = json.loads(json.dumps(pattern).replace(marker, key))
         data["hooks"] = expanded
         data.setdefault("version", 1)
-        events = list(EVENTS)
 
+    events = registered_events(data["hooks"])
     meta = {
         "events": events,
         "event_count": len(events),
@@ -585,6 +650,8 @@ def render_hooks(paths: Paths, python: str | None = None, wrapper: str | None = 
         "repo": str(repo),
         "wrapper": str(wrapper_path),
         "wrapper_exists": wrapper_path.is_file(),
+        "shell_wrapper": str(shell_path),
+        "shell_wrapper_exists": shell_path.is_file(),
         "absolute": os.path.isabs(interpreter) and os.path.isabs(str(wrapper_path)),
         "missing_events": sorted(set(EVENTS) - set(events)),
     }

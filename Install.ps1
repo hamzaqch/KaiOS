@@ -196,27 +196,162 @@ function ConvertTo-JsonStringLiteral {
     return $builder.ToString()
 }
 
+function ConvertTo-KaiosJson {
+    # A small deterministic serializer, used instead of ConvertTo-Json so the
+    # rendered registry comes out byte-identical on every run of every host:
+    # 5.1 and 7 differ in depth handling and in how they treat a one-element
+    # array, and this file has to be idempotent on 5.1.
+    [CmdletBinding()]
+    param($Value, [int]$Depth = 0)
+
+    $pad = ' ' * ($Depth * 2)
+    $inner = ' ' * (($Depth + 1) * 2)
+
+    if ($null -eq $Value) { return 'null' }
+    if ($Value -is [string]) { return (ConvertTo-JsonStringLiteral -Value $Value) }
+    if ($Value -is [bool]) {
+        if ($Value) { return 'true' }
+        return 'false'
+    }
+    if ($Value -is [int] -or $Value -is [long] -or $Value -is [double] -or $Value -is [decimal]) {
+        return ([string]$Value)
+    }
+
+    $parts = New-Object System.Collections.Generic.List[string]
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        foreach ($key in $Value.Keys) {
+            $rendered = ConvertTo-KaiosJson -Value $Value[$key] -Depth ($Depth + 1)
+            $parts.Add($inner + (ConvertTo-JsonStringLiteral -Value ([string]$key)) + ': ' + $rendered)
+        }
+        if ($parts.Count -eq 0) { return '{}' }
+        return "{`n" + ($parts -join ",`n") + "`n" + $pad + '}'
+    }
+
+    if ($Value -is [System.Collections.IEnumerable]) {
+        foreach ($item in $Value) {
+            $parts.Add($inner + (ConvertTo-KaiosJson -Value $item -Depth ($Depth + 1)))
+        }
+        if ($parts.Count -eq 0) { return '[]' }
+        return "[`n" + ($parts -join ",`n") + "`n" + $pad + ']'
+    }
+
+    foreach ($property in $Value.PSObject.Properties) {
+        $rendered = ConvertTo-KaiosJson -Value $property.Value -Depth ($Depth + 1)
+        $parts.Add($inner + (ConvertTo-JsonStringLiteral -Value $property.Name) + ': ' + $rendered)
+    }
+    if ($parts.Count -eq 0) { return '{}' }
+    return "{`n" + ($parts -join ",`n") + "`n" + $pad + '}'
+}
+
+function Set-AbsoluteFileArgument {
+    # `powershell … -File <path> <Event>`: the token after -File becomes absolute.
+    [CmdletBinding()]
+    param([string]$CommandLine, [string]$WrapperPath)
+
+    $tokens = @($CommandLine -split ' ')
+    for ($i = 0; $i -lt $tokens.Count; $i++) {
+        if ($tokens[$i].ToLowerInvariant() -eq '-file') {
+            if (($i + 1) -lt $tokens.Count) {
+                $tokens[$i + 1] = Format-CommandToken -Token $WrapperPath
+                return ($tokens -join ' ')
+            }
+        }
+    }
+    return $CommandLine
+}
+
+function Set-AbsoluteShellArgument {
+    # `sh <path> <Event>`: the token after the shell becomes absolute.
+    [CmdletBinding()]
+    param([string]$CommandLine, [string]$WrapperPath)
+
+    $shells = @('sh', 'bash', 'sh.exe', 'bash.exe')
+    $tokens = @($CommandLine -split ' ')
+    for ($i = 0; $i -lt $tokens.Count; $i++) {
+        $leaf = ([System.IO.Path]::GetFileName($tokens[$i])).ToLowerInvariant()
+        if ($shells -contains $leaf) {
+            if (($i + 1) -lt $tokens.Count) {
+                $tokens[$i + 1] = Format-CommandToken -Token $WrapperPath
+                return ($tokens -join ' ')
+            }
+        }
+    }
+    return $CommandLine
+}
+
+function Set-AbsolutePythonArgument {
+    # A bare `python -m kaios.hooks <Event>` gets this machine's interpreter.
+    [CmdletBinding()]
+    param([string]$CommandLine, [string]$PythonPrefix)
+
+    if (-not $PythonPrefix) { return $CommandLine }
+    $names = @('python', 'python3', 'py', 'python.exe', 'python3.exe', 'py.exe')
+    $tokens = @($CommandLine -split ' ')
+    if ($tokens.Count -eq 0) { return $CommandLine }
+    $leaf = ([System.IO.Path]::GetFileName($tokens[0])).ToLowerInvariant()
+    if ($names -contains $leaf) {
+        $tokens[0] = $PythonPrefix
+        return ($tokens -join ' ')
+    }
+    return $CommandLine
+}
+
+function Set-HookEntryPaths {
+    # Every command line in one registry entry, pointed at an absolute wrapper.
+    # Four keys can carry one: `bash` and `powershell` on a Copilot CLI entry,
+    # `command` inside a Claude nested entry, and `command`/`windows` on an entry
+    # in the shape KaiOS shipped before the two dialects were reconciled.
+    [CmdletBinding()]
+    param($Entry, [string]$WrapperPath, [string]$ShellWrapperPath, [string]$PythonPrefix)
+
+    if ($null -eq $Entry) { return }
+    $names = @($Entry.PSObject.Properties.Name)
+
+    if ($names -contains 'hooks') {
+        foreach ($nested in @($Entry.hooks)) {
+            Set-HookEntryPaths -Entry $nested -WrapperPath $WrapperPath -ShellWrapperPath $ShellWrapperPath -PythonPrefix $PythonPrefix
+        }
+        return
+    }
+    if ($names -contains 'command') {
+        $line = Set-AbsolutePythonArgument -CommandLine ([string]$Entry.command) -PythonPrefix $PythonPrefix
+        $Entry.command = Set-AbsoluteFileArgument -CommandLine $line -WrapperPath $WrapperPath
+    }
+    if ($names -contains 'windows') {
+        $Entry.windows = Set-AbsoluteFileArgument -CommandLine ([string]$Entry.windows) -WrapperPath $WrapperPath
+    }
+    if ($names -contains 'powershell') {
+        $Entry.powershell = Set-AbsoluteFileArgument -CommandLine ([string]$Entry.powershell) -WrapperPath $WrapperPath
+    }
+    if ($names -contains 'bash') {
+        $Entry.bash = Set-AbsoluteShellArgument -CommandLine ([string]$Entry.bash) -WrapperPath $ShellWrapperPath
+    }
+}
+
 function Format-HookRegistry {
+    # The checked-in registry with absolute wrapper paths and nothing else
+    # changed. Its event-key spelling and its two entry shapes are what decide
+    # whether each of Copilot's two hook engines can read the file at all, so
+    # this rewrites the paths in place rather than rebuilding the structure.
     [CmdletBinding()]
     param(
-        [string]$TemplatePath,
+        [string]$RegistryPath,
         [string]$WrapperPath,
+        [string]$ShellWrapperPath,
         [hashtable]$Launcher
     )
 
-    $template = [System.IO.File]::ReadAllText($TemplatePath) | ConvertFrom-Json
-    $events = @($template.hooks.PSObject.Properties.Name)
-    if ($events.Count -eq 0) {
-        throw "hook template $TemplatePath registers no events"
+    $registry = [System.IO.File]::ReadAllText($RegistryPath) | ConvertFrom-Json
+    if (-not $registry) {
+        throw "hook registry $RegistryPath does not parse"
     }
-
-    $timeout = 20
-    $firstEntries = @($template.hooks.($events[0]))
-    if ($firstEntries.Count -gt 0) {
-        $entry = $firstEntries[0]
-        if ($entry.PSObject.Properties.Name -contains 'timeout') {
-            $timeout = [int]$entry.timeout
-        }
+    if (-not (@($registry.PSObject.Properties.Name) -contains 'hooks')) {
+        throw "hook registry $RegistryPath has no hooks object"
+    }
+    $events = @($registry.hooks.PSObject.Properties.Name)
+    if ($events.Count -eq 0) {
+        throw "hook registry $RegistryPath registers no events"
     }
 
     $pythonTokens = @()
@@ -230,28 +365,14 @@ function Format-HookRegistry {
         $pythonTokens += 'python3'
     }
     $pythonPrefix = ($pythonTokens -join ' ')
-    $wrapperToken = Format-CommandToken -Token $WrapperPath
 
-    $lines = New-Object System.Collections.Generic.List[string]
-    $lines.Add('{')
-    $lines.Add('  "version": 1,')
-    $lines.Add('  "hooks": {')
-    for ($i = 0; $i -lt $events.Count; $i++) {
-        $name = $events[$i]
-        $posix = "$pythonPrefix -m kaios.hooks $name"
-        $windows = "powershell -NoProfile -ExecutionPolicy Bypass -File $wrapperToken $name"
-        $lines.Add('    ' + (ConvertTo-JsonStringLiteral -Value $name) + ': [')
-        $lines.Add('      {')
-        $lines.Add('        "type": "command",')
-        $lines.Add('        "command": ' + (ConvertTo-JsonStringLiteral -Value $posix) + ',')
-        $lines.Add('        "windows": ' + (ConvertTo-JsonStringLiteral -Value $windows) + ',')
-        $lines.Add('        "timeout": ' + $timeout)
-        $lines.Add('      }')
-        if ($i -lt ($events.Count - 1)) { $lines.Add('    ],') } else { $lines.Add('    ]') }
+    foreach ($name in $events) {
+        foreach ($entry in @($registry.hooks.$name)) {
+            Set-HookEntryPaths -Entry $entry -WrapperPath $WrapperPath -ShellWrapperPath $ShellWrapperPath -PythonPrefix $pythonPrefix
+        }
     }
-    $lines.Add('  }')
-    $lines.Add('}')
-    return (($lines -join "`n") + "`n")
+
+    return ((ConvertTo-KaiosJson -Value $registry) + "`n")
 }
 
 # ----------------------------------------------------------------------------
@@ -353,17 +474,37 @@ Copy-TreeIfDifferent -Source $packageSource -Destination $packageTarget -Label '
 # User-level hook registry, rendered with absolute paths
 # ----------------------------------------------------------------------------
 
-$hookTemplate = Join-KaiosPath -Base $githubDir -Relative 'hooks/kaios.json'
-$hookWrapper = Join-KaiosPath -Base $githubDir -Relative 'hooks/kaios.ps1'
-$hookTarget = Join-KaiosPath -Base $CopilotHome -Relative 'hooks/kaios.json'
+$hookSource = Join-KaiosPath -Base $githubDir -Relative 'hooks/kaios.json'
+$hookDir = Join-KaiosPath -Base $CopilotHome -Relative 'hooks'
+$hookTarget = Join-KaiosPath -Base $hookDir -Relative 'kaios.json'
+
+# Both wrappers are copied beside the user-level registry, and the registry
+# points at those copies, so hooks keep working when the checkout moves. The
+# wrappers find the Python package from KAIOS_REPO or from $KAIOS_HOME\lib, both
+# of which this installer sets, so they do not need to sit inside a checkout.
+$hookWrapper = Join-KaiosPath -Base $hookDir -Relative 'kaios.ps1'
+$hookShellWrapper = Join-KaiosPath -Base $hookDir -Relative 'kaios.sh'
+$wrapperFiles = @(
+    @{ Name = 'kaios.ps1'; Target = $hookWrapper },
+    @{ Name = 'kaios.sh';  Target = $hookShellWrapper }
+)
+foreach ($item in $wrapperFiles) {
+    $from = Join-KaiosPath -Base $githubDir -Relative ('hooks/' + $item.Name)
+    if (Test-Path -LiteralPath $from) {
+        Copy-FileIfDifferent -Source $from -Destination $item.Target
+    }
+    else {
+        $script:Notes.Add(('skipped hooks/{0} — not present in this checkout' -f $item.Name))
+    }
+}
 
 $launcher = Resolve-PythonLauncher
 if (-not $launcher) {
     $script:Notes.Add('python not found on PATH — hook registry rendered with a bare python3 command')
 }
 
-if (Test-Path -LiteralPath $hookTemplate) {
-    $rendered = Format-HookRegistry -TemplatePath $hookTemplate -WrapperPath $hookWrapper -Launcher $launcher
+if (Test-Path -LiteralPath $hookSource) {
+    $rendered = Format-HookRegistry -RegistryPath $hookSource -WrapperPath $hookWrapper -ShellWrapperPath $hookShellWrapper -Launcher $launcher
     $existing = ''
     if (Test-Path -LiteralPath $hookTarget) {
         $existing = [System.IO.File]::ReadAllText($hookTarget)
@@ -377,7 +518,7 @@ if (Test-Path -LiteralPath $hookTemplate) {
     }
 }
 else {
-    $script:Notes.Add('skipped hooks/kaios.json — template not present in this checkout')
+    $script:Notes.Add('skipped hooks/kaios.json — not present in this checkout')
 }
 
 # ----------------------------------------------------------------------------

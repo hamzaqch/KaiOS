@@ -3,11 +3,17 @@
 import json
 import os
 import unittest
+from pathlib import Path
 
 from kaios import isa as isa_mod
 from kaios import setup as setup_mod
-from kaios.events import EVENTS
+from kaios.events import EVENTS, NESTED_REGISTRY_EVENTS, REGISTRY_EVENT_NAMES
 from tests.support import TempHomeCase, fixtures, read, repo_root
+
+
+def _file_argument(command_line: str) -> str:
+    """The path a ``powershell … -File <path> <Event>`` line runs."""
+    return command_line.split(" -File ")[1].rsplit(" ", 1)[0]
 
 
 class DetectTests(TempHomeCase):
@@ -186,20 +192,37 @@ class RenderTests(TempHomeCase):
     def test_hook_registry_covers_every_event_with_absolute_paths(self) -> None:
         self.assertTrue(self.paths.hooks_json.is_file())
         data = json.loads(read(self.paths.hooks_json))
-        self.assertEqual(sorted(data["hooks"]), sorted(EVENTS))
+        self.assertEqual(
+            sorted(data["hooks"]),
+            sorted(REGISTRY_EVENT_NAMES[event] for event in EVENTS),
+        )
         self.assertNotIn("x-kaios", data)
-        for event, entries in data["hooks"].items():
+        for key, entries in data["hooks"].items():
             self.assertEqual(len(entries), 1)
             entry = entries[0]
+            if key in NESTED_REGISTRY_EVENTS:
+                # A Claude nested entry: the VS Code engine reads it natively and
+                # the Copilot CLI engine reads it under Claude semantics.
+                nested = entry["hooks"]
+                self.assertEqual(len(nested), 1)
+                self.assertEqual(nested[0]["type"], "command")
+                self.assertTrue(nested[0]["command"].endswith(" %s" % key))
+                self.assertIn("kaios.ps1", nested[0]["command"])
+                self.assertTrue(os.path.isabs(_file_argument(nested[0]["command"])))
+                continue
             self.assertEqual(entry["type"], "command")
-            self.assertTrue(entry["command"].endswith("-m kaios.hooks %s" % event))
-            self.assertTrue(entry["windows"].endswith("%s" % event))
-            self.assertIn("kaios.ps1", entry["windows"])
-            self.assertTrue(os.path.isabs(entry["command"].split(" -m ")[0]))
+            self.assertTrue(entry["powershell"].endswith(" %s" % key))
+            self.assertIn("kaios.ps1", entry["powershell"])
+            self.assertTrue(os.path.isabs(_file_argument(entry["powershell"])))
+            self.assertTrue(entry["bash"].endswith(" %s" % key))
+            self.assertIn("kaios.sh", entry["bash"])
+            self.assertTrue(os.path.isabs(entry["bash"].split(" ")[1]))
+            self.assertEqual(entry["timeoutSec"], 20)
             self.assertTrue(os.path.isabs(entry["env"]["PYTHONPATH"]))
             self.assertTrue(os.path.isabs(entry["env"]["KAIOS_HOME"]))
         self.assertTrue(os.path.isabs(data["cwd"]))
         self.assertTrue(self.result["hooks"]["absolute"])
+        self.assertEqual(self.result["hooks"]["events"], list(EVENTS))
 
     def test_render_reports_every_file_it_wrote(self) -> None:
         written = self.result["written"]
@@ -230,22 +253,39 @@ class RenderTests(TempHomeCase):
 class HookRenderTests(TempHomeCase):
     def test_windows_paths_stay_valid_json(self) -> None:
         text, meta = setup_mod.render_hooks(
-            self.paths, python="C:\\tools\\python\\python.exe", wrapper="D:\\work\\repo\\hooks\\kaios.ps1"
+            self.paths,
+            python="C:\\tools\\python\\python.exe",
+            wrapper="D:\\work\\repo\\hooks\\kaios.ps1",
+            shell_wrapper="D:\\work\\repo\\hooks\\kaios.sh",
         )
         data = json.loads(text)
-        entry = data["hooks"]["SessionStart"][0]
-        self.assertIn("C:\\tools\\python\\python.exe", entry["command"])
-        self.assertIn("D:\\work\\repo\\hooks\\kaios.ps1", entry["windows"])
+        entry = data["hooks"]["sessionStart"][0]
+        self.assertIn("D:\\work\\repo\\hooks\\kaios.ps1", entry["powershell"])
+        self.assertIn("D:\\work\\repo\\hooks\\kaios.sh", entry["bash"])
+        nested = data["hooks"]["PreCompact"][0]["hooks"][0]
+        self.assertIn("D:\\work\\repo\\hooks\\kaios.ps1", nested["command"])
         self.assertEqual(meta["python"], "C:\\tools\\python\\python.exe")
 
     def test_repo_wrapper_path_is_reported(self) -> None:
         paths = type(self.paths)(home=self.home, repo=repo_root(), cwd=repo_root())
         _, meta = setup_mod.render_hooks(paths)
         self.assertTrue(meta["wrapper"].endswith(setup_mod.WRAPPER_RELATIVE.replace("/", os.sep)))
+        self.assertTrue(
+            meta["shell_wrapper"].endswith(setup_mod.SHELL_WRAPPER_RELATIVE.replace("/", os.sep))
+        )
+        self.assertTrue(meta["wrapper_exists"])
+        self.assertTrue(meta["shell_wrapper_exists"])
         self.assertEqual(sorted(meta["events"]), sorted(EVENTS))
         self.assertEqual(meta["missing_events"], [])
 
     def test_the_checked_in_registry_is_the_source_of_truth(self) -> None:
+        """Key spelling and entry shape survive rendering; only paths change.
+
+        Both are load-bearing. The spelling decides which of Copilot's two hook
+        engines recognises the event, and the shape decides whether that engine
+        can parse the entry at all, so a render that normalised either would
+        reintroduce the bug this file is the fixture for.
+        """
         paths = type(self.paths)(home=self.home, repo=repo_root(), cwd=repo_root())
         source = setup_mod.repo_hooks_registry(paths)
         self.assertIsNotNone(source, "this checkout has no .github/hooks/kaios.json")
@@ -255,20 +295,47 @@ class HookRenderTests(TempHomeCase):
         self.assertEqual(meta["source"], str(source))
         self.assertEqual(rendered["version"], original.get("version", 1))
         self.assertEqual(sorted(rendered["hooks"]), sorted(original["hooks"]))
-        for event, entries in original["hooks"].items():
-            self.assertEqual(len(rendered["hooks"][event]), len(entries))
-            for before, after in zip(entries, rendered["hooks"][event]):
-                self.assertEqual(after.get("type"), before.get("type"))
-                self.assertEqual(after.get("timeout"), before.get("timeout"))
-                self.assertTrue(after["command"].endswith("-m kaios.hooks %s" % event))
-                self.assertTrue(os.path.isabs(after["command"].split(" -m ")[0]))
-                self.assertIn(str(meta["wrapper"]), after["windows"])
-                self.assertTrue(after["windows"].endswith(event))
+        self.assertEqual(meta["events"], list(EVENTS))
+        for key, entries in original["hooks"].items():
+            self.assertEqual(len(rendered["hooks"][key]), len(entries))
+            for before, after in zip(entries, rendered["hooks"][key]):
+                self.assertEqual(sorted(before), sorted(k for k in after if k != "env"))
+                if "hooks" in before:
+                    self.assertEqual(after["hooks"][0]["type"], before["hooks"][0]["type"])
+                    self.assertEqual(after["hooks"][0]["timeout"], before["hooks"][0]["timeout"])
+                    self.assertIn(str(meta["wrapper"]), after["hooks"][0]["command"])
+                    self.assertTrue(after["hooks"][0]["command"].endswith(" %s" % key))
+                    self.assertNotIn("env", after)
+                    continue
+                self.assertEqual(after["type"], before["type"])
+                self.assertEqual(after["timeoutSec"], before["timeoutSec"])
+                self.assertIn(str(meta["wrapper"]), after["powershell"])
+                self.assertIn(str(meta["shell_wrapper"]), after["bash"])
+                self.assertTrue(after["powershell"].endswith(" %s" % key))
+                self.assertTrue(after["bash"].endswith(" %s" % key))
 
     def test_the_template_is_the_fallback_with_no_checkout(self) -> None:
         text, meta = setup_mod.render_hooks(self.paths)
+        data = json.loads(text)
         self.assertEqual(meta["source"], "template")
-        self.assertEqual(sorted(json.loads(text)["hooks"]), sorted(EVENTS))
+        self.assertEqual(
+            sorted(data["hooks"]),
+            sorted(REGISTRY_EVENT_NAMES[event] for event in EVENTS),
+        )
+        self.assertEqual(meta["events"], list(EVENTS))
+        for event in NESTED_REGISTRY_EVENTS:
+            self.assertIn("hooks", data["hooks"][event][0])
+        self.assertIn("bash", data["hooks"]["preToolUse"][0])
+
+    def test_a_relative_shell_path_becomes_absolute(self) -> None:
+        self.assertEqual(
+            setup_mod._absolute_bash("sh .github/hooks/kaios.sh preToolUse", Path("/abs/kaios.sh")),
+            "sh /abs/kaios.sh preToolUse",
+        )
+        self.assertEqual(
+            setup_mod._absolute_bash("kaios.sh preToolUse", Path("/abs/kaios.sh")),
+            "kaios.sh preToolUse",
+        )
 
     def test_a_registry_with_no_hooks_object_is_refused(self) -> None:
         repo = self.fake_repo()

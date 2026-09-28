@@ -17,7 +17,7 @@ from . import EVENTS, canonical
 from .. import events as events_mod
 from ..paths import Paths
 from . import runner as runner_mod
-from .samples import sample
+from .samples import DIALECTS, sample
 
 OK = 0
 FAILURE = 1
@@ -98,42 +98,62 @@ def do_list(paths: Paths, as_md: bool = False) -> int:
 
 
 def probe(home: str | None = None) -> dict:
-    """Fire every event in-process with its sample payload. Never raises."""
+    """Fire every event in both dialects with its sample payload. Never raises.
+
+    Both dialects, because Copilot has two hook engines and they spell the event
+    fields differently. A guard that reads ``tool_input`` and not ``toolArgs``
+    passes a one-dialect probe and then waves through every tool call the other
+    engine sends, which is exactly the failure this doubling catches.
+    """
     rows = []
     for name in EVENTS:
-        payload = sample(name)
-        note = ""
-        valid = False
-        decision = None
-        try:
-            decision = runner_mod.dispatch(name, payload, home=home)
-            blob = json.dumps(decision, sort_keys=True, default=str)
-            reloaded = json.loads(blob)
-            valid = isinstance(reloaded, dict) and "continue" in reloaded
-            if not valid:
-                note = "output is not an object with a continue key"
-        except Exception as exc:  # noqa: BLE001 - the probe reports, never crashes
-            note = "%s: %s" % (type(exc).__name__, exc)
-        rows.append(
-            {
-                "event": name,
-                "hooks": len(runner_mod.discover(name)),
-                "ok": bool(valid),
-                "keys": sorted(decision) if isinstance(decision, dict) else [],
-                "note": note,
-            }
-        )
+        for dialect in DIALECTS:
+            payload = sample(name, dialect)
+            note = ""
+            valid = False
+            decision = None
+            try:
+                decision = runner_mod.dispatch(name, payload, home=home)
+                blob = json.dumps(decision, sort_keys=True, default=str)
+                reloaded = json.loads(blob)
+                valid = isinstance(reloaded, dict) and "continue" in reloaded
+                if not valid:
+                    note = "output is not an object with a continue key"
+            except Exception as exc:  # noqa: BLE001 - the probe reports, never crashes
+                note = "%s: %s" % (type(exc).__name__, exc)
+            rows.append(
+                {
+                    "event": name,
+                    "dialect": dialect,
+                    "hooks": len(runner_mod.discover(name)),
+                    "ok": bool(valid),
+                    "keys": sorted(decision) if isinstance(decision, dict) else [],
+                    "note": note,
+                }
+            )
     failed = [row for row in rows if not row["ok"]]
-    return {"ok": not failed, "events": len(rows), "failed": len(failed), "rows": rows}
+    return {
+        "ok": not failed,
+        "events": len(EVENTS),
+        "dialects": list(DIALECTS),
+        "failed": len(failed),
+        "rows": rows,
+    }
 
 
 def probe_markdown(report: dict) -> str:
-    lines = ["# kaios hooks probe", "", "| event | hooks | result | keys | note |", "|---|---|---|---|---|"]
+    lines = [
+        "# kaios hooks probe",
+        "",
+        "| event | dialect | hooks | result | keys | note |",
+        "|---|---|---|---|---|---|",
+    ]
     for row in report["rows"]:
         lines.append(
-            "| %s | %d | %s | %s | %s |"
+            "| %s | %s | %d | %s | %s | %s |"
             % (
                 row["event"],
+                row.get("dialect") or "-",
                 row["hooks"],
                 "OK" if row["ok"] else "FAIL",
                 ", ".join(row["keys"]) or "-",
@@ -142,8 +162,14 @@ def probe_markdown(report: dict) -> str:
         )
     lines += [
         "",
-        "%s — %d event(s), %d failed."
-        % ("PASS" if report["ok"] else "FAIL", report["events"], report["failed"]),
+        "%s — %d event(s) in %d dialect(s), %d row(s), %d failed."
+        % (
+            "PASS" if report["ok"] else "FAIL",
+            report["events"],
+            len(report.get("dialects") or [1]),
+            len(report["rows"]),
+            report["failed"],
+        ),
         "",
     ]
     return "\n".join(lines)

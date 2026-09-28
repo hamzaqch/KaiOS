@@ -206,7 +206,17 @@ def _import(event_name: str, stem: str):
 
 
 def merge(event_name: str, results: list) -> dict:
-    """Fold every hook result into the single object the harness reads."""
+    """Fold every hook result into the single object the harness reads.
+
+    Every decision is written twice, once in each dialect Copilot reads. The VS
+    Code engine takes a tool decision from ``hookSpecificOutput`` and a stop from
+    ``continue``/``stopReason``; the Copilot CLI engine takes the same two from
+    top-level ``permissionDecision`` and from ``decision``/``reason``. Both sets
+    say the same thing, so whichever engine is reading finds its own keys and the
+    other engine's keys are inert to it. ``additionalContext`` is the one field
+    both spell the same way. ``decision`` appears only on a block, because the
+    CLI engine reads the bare presence of that key as the verdict.
+    """
     contexts: list = []
     decision: str | None = None
     reasons: dict = {}
@@ -245,17 +255,23 @@ def merge(event_name: str, results: list) -> dict:
             suppress = True
 
     out: dict = {"continue": not blocked}
-    if blocked and stop_reasons:
-        out["stopReason"] = "; ".join(stop_reasons)
+    if blocked:
+        out["decision"] = "block"
+        if stop_reasons:
+            joined = "; ".join(stop_reasons)
+            out["stopReason"] = joined
+            out["reason"] = joined
     if contexts:
         out["additionalContext"] = "\n\n".join(contexts)
     if decision is not None:
+        reason = "; ".join(reasons.get(decision) or []) or "no reason given"
         out["hookSpecificOutput"] = {
             "hookEventName": event_name,
             "permissionDecision": decision,
-            "permissionDecisionReason": "; ".join(reasons.get(decision) or [])
-            or "no reason given",
+            "permissionDecisionReason": reason,
         }
+        out["permissionDecision"] = decision
+        out["permissionDecisionReason"] = reason
     if updated_input is not None:
         out["updatedInput"] = updated_input
     if suppress:

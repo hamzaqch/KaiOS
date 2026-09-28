@@ -26,7 +26,7 @@ from kaios.hooks import runner as runner_mod
 from kaios.hooks import state as state_mod
 from kaios.hooks import surfaces
 from kaios.hooks import util
-from kaios.hooks.samples import sample
+from kaios.hooks.samples import DIALECTS, sample
 from kaios import events as events_mod
 from kaios.paths import Paths
 from tests.support import TempHomeCase, fixtures, repo_root, write
@@ -193,6 +193,86 @@ class RunnerMergeTests(HookCase):
         self.assertEqual(runner_mod.merge("Stop", [None, {}, 7]), {"continue": True})
 
 
+class DualDialectOutputTests(HookCase):
+    """Every decision is written in both dialects Copilot's two engines read.
+
+    The VS Code engine reads a tool decision from ``hookSpecificOutput`` and a
+    stop from ``continue``/``stopReason``. The Copilot CLI engine reads the same
+    two from top-level ``permissionDecision`` and from ``decision``/``reason``.
+    Emitting one dialect means the other engine sees a hook that answered and
+    decided nothing, which is how a deny becomes a silent allow.
+    """
+
+    def test_a_deny_carries_both_spellings(self):
+        merged = runner_mod.merge("PreToolUse", [util.deny("never")])
+        self.assertEqual(merged["permissionDecision"], "deny")
+        self.assertIn("never", merged["permissionDecisionReason"])
+        self.assertEqual(merged["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertEqual(merged["hookSpecificOutput"]["hookEventName"], "PreToolUse")
+        self.assertEqual(
+            merged["permissionDecisionReason"],
+            merged["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+    def test_an_ask_carries_both_spellings(self):
+        merged = runner_mod.merge("PreToolUse", [util.ask("confirm")])
+        self.assertEqual(merged["permissionDecision"], "ask")
+        self.assertEqual(merged["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_a_stop_block_carries_both_spellings(self):
+        merged = runner_mod.merge("Stop", [util.block("a claim has no evidence")])
+        self.assertFalse(merged["continue"])
+        self.assertEqual(merged["stopReason"], "a claim has no evidence")
+        self.assertEqual(merged["decision"], "block")
+        self.assertEqual(merged["reason"], merged["stopReason"])
+
+    def test_a_subagent_stop_block_carries_both_spellings(self):
+        merged = runner_mod.merge("SubagentStop", [util.block("no report arrived")])
+        self.assertFalse(merged["continue"])
+        self.assertEqual(merged["decision"], "block")
+        self.assertEqual(merged["reason"], "no report arrived")
+
+    def test_no_decision_key_when_nothing_blocks(self):
+        for results in ([], [util.context("hello")], [util.ask("confirm")]):
+            merged = runner_mod.merge("PreToolUse", results)
+            self.assertNotIn("decision", merged, merged)
+            self.assertNotIn("reason", merged, merged)
+
+    def test_additional_context_has_one_spelling_in_both_dialects(self):
+        merged = runner_mod.merge("SessionStart", [util.context("here is the state")])
+        self.assertEqual(merged["additionalContext"], "here is the state")
+
+    def test_a_copilot_cli_payload_denies(self):
+        """The engine-B field names, which is what the CLI engine actually sends."""
+        decision = self.dispatch(
+            "preToolUse",
+            {
+                "toolName": "bash",
+                "toolArgs": {"command": "git push --force origin main"},
+                "cwd": str(self.scratch),
+            },
+        )
+        self.assertEqual(decision["permissionDecision"], "deny")
+        self.assertEqual(decision["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertEqual(decision["hookSpecificOutput"]["hookEventName"], "PreToolUse")
+
+    def test_the_same_payload_in_either_dialect_decides_the_same_way(self):
+        claude = self.dispatch(
+            "PreToolUse",
+            {
+                "tool_name": "runCommands",
+                "tool_input": {"command": "rm -rf /"},
+                "cwd": str(self.scratch),
+            },
+        )
+        copilot = self.dispatch(
+            "preToolUse",
+            {"toolName": "bash", "toolArgs": {"command": "rm -rf /"}, "cwd": str(self.scratch)},
+        )
+        self.assertEqual(claude["permissionDecision"], "deny")
+        self.assertEqual(copilot["permissionDecision"], "deny")
+
+
 class RunnerInputTests(HookCase):
     def test_empty_stdin_is_an_empty_object(self):
         payload, error = runner_mod.read_stdin(io.StringIO(""))
@@ -306,24 +386,32 @@ class RaisingHookTests(HookCase):
 
 
 class ProbeTests(HookCase):
-    """ISC-18: every event answers with valid JSON, in-process."""
+    """ISC-18: every event answers with valid JSON, in-process, in both dialects."""
 
     def test_every_event_returns_valid_json(self):
         for name in EVENTS:
-            payload = sample(name)
-            payload["cwd"] = str(self.scratch)
-            decision = runner_mod.dispatch(name, payload, home=str(self.home))
-            reloaded = json.loads(json.dumps(decision))
-            self.assertIsInstance(reloaded, dict, name)
-            self.assertIn("continue", reloaded, name)
+            for dialect in DIALECTS:
+                payload = sample(name, dialect)
+                payload["cwd"] = str(self.scratch)
+                decision = runner_mod.dispatch(name, payload, home=str(self.home))
+                reloaded = json.loads(json.dumps(decision))
+                self.assertIsInstance(reloaded, dict, (name, dialect))
+                self.assertIn("continue", reloaded, (name, dialect))
 
     def test_probe_report_is_all_ok(self):
         report = hooks_cli.probe(home=str(self.home))
         self.assertTrue(report["ok"], report)
         self.assertEqual(report["events"], 8)
         self.assertEqual(report["failed"], 0)
-        self.assertEqual(len(report["rows"]), 8)
+        self.assertEqual(report["dialects"], list(DIALECTS))
+        self.assertEqual(len(report["rows"]), 8 * len(DIALECTS))
         self.assertIn("PASS", hooks_cli.probe_markdown(report))
+
+    def test_the_probe_covers_every_event_in_every_dialect(self):
+        report = hooks_cli.probe(home=str(self.home))
+        covered = sorted((row["event"], row["dialect"]) for row in report["rows"])
+        expected = sorted((name, dialect) for name in EVENTS for dialect in DIALECTS)
+        self.assertEqual(covered, expected)
 
     def test_probe_exit_code_is_zero(self):
         out = io.StringIO()

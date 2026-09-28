@@ -1,6 +1,6 @@
 ---
-phase: complete
-progress: 40/40
+phase: climbing
+progress: 40/41
 task: "Build KaiOS: a full harness of the reference class for Copilot in VS Code"
 slug: kaios
 started: 2026-09-28T00:00:00Z
@@ -118,6 +118,7 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 
 - [x] ISC-39: the `create-workflow` skill plus `workflow_tool.py` interview the user to pick a kind (KaiOS multi-agent workflow, GitHub Actions workflow, Databricks job/bundle workflow), scaffold it (`workflow.json` spec + orchestrator `.agent.md` with handoffs; or `.github/workflows/<name>.yml`; or `resources/<name>.job.yml` bundle resource), validate it (`workflow_tool.py validate <file>` exits 1 on a malformed spec or YAML shape), and track runs in `$KAIOS_HOME/MEMORY/STATE/workflows.json`. Falsifier: scaffold each kind from a fixture answers file and validate; seeded broken spec fails. — evidence: test_workflow 34 OK (c525246)
 - [x] ISC-40: the hook wrapper works from any workspace, not only the KaiOS checkout: with only `KAIOS_REPO` set, or only `%KAIOS_HOME%\lib\kaios` present, a force-push payload from a foreign workspace returns a real `deny` with zero bytes on stderr; with neither, it logs to `hook-errors.log`, still writes zero stderr, and returns continue; `KAIOS_HOOKS_DISABLED=1` short-circuits. Falsifier: `tests/test_foreign_workspace.py`. — evidence: test_foreign_workspace 4 OK; Install.ps1 copies 179 files incl. lib/kaios
+- [ ] ISC-41: one hook registry is valid in both Copilot engines. The VS Code Local harness (PascalCase events, `command`/`windows`) and the Copilot CLI engine (camelCase events, `bash`/`powershell`/`timeoutSec`, fail-closed on preToolUse errors) both load every hook from `.github/hooks/kaios.json` with no hook firing twice; the runner emits both output dialects (`hookSpecificOutput.permissionDecision` and top-level `permissionDecision`; `continue:false`+`stopReason` and `decision:"block"`+`reason`) and reads both stdin dialects (`tool_input`/`toolArgs`). Falsifier: `tests/test_registry_dialects.py` plus a CLI-dialect payload through `kaios.sh`/`kaios.ps1` returning a deny.
 
 ## Anti-claims
 
@@ -156,6 +157,7 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 ## Log
 
 - 2026-09-28: ISA scaffolded; build fan-out begins.
+- 2026-09-28 (field incident 2, reopened): after the package fix, work reported "until .github/hooks/kaios.json is repaired it will still block; I can't find that file". Traced in VS Code source (hookTypes.ts, hookCompatibility.ts, hookSchema.ts, hookExecutor.ts) and GitHub's hooks reference: two engines read the same folder; the Copilot CLI engine wants camelCase events with `bash`/`powershell`/`timeoutSec`, drops mismatched items, and fails closed on preToolUse. Our file was in the VS Code Local dialect only. Fix: one dual-dialect registry (ISC-41). The missing file is the user-level copy at `%USERPROFILE%\.copilot\hooks\kaios.json`.
 - 2026-09-28 (field incident, reopened): first use at work reported "pre-tool hook erroring, every command denied". Reproduced here: in a workspace scaffolded by Init-Workspace.ps1 the wrapper ran `python -m kaios.hooks` with no `kaios` on the path, wrote ModuleNotFoundError to stderr, and the harness failed closed. Fix: wrapper resolves the package (KAIOS_REPO → KAIOS_HOME/lib → own repo), sets PYTHONPATH, logs child stderr to a file, adds a kill switch; Install.ps1 copies the package to lib and sets KAIOS_REPO. Regression test added (ISC-40). Lesson: "verified in the checkout" was an example claim; the universal claim is "verified from any workspace".
 - 2026-09-28: six parallel builders (doctrine, core, thinking skills, system skills, agents/installers, workflow) then hooks; each builder cross-audited neighbours' files with independent validators; three stale cross-agent findings were caught by re-verification, which drove the two snapshot commits and datable integrity reports.
 - 2026-09-28: second look elected: none beyond the builders' mutual audits. Reason: every claim has a deterministic probe that passed in one run (`verify.sh`, 39/39), two independent skill validators and two link checkers agreed tree-wide, and the surface is a private work repo, not an authority boundary. Recorded per Algorithm claim 11.
