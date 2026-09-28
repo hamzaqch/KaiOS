@@ -13,6 +13,7 @@ import json
 import sys
 
 from . import EVENTS, canonical
+from .. import events as events_mod
 from ..paths import Paths
 from . import runner as runner_mod
 from .samples import sample
@@ -33,7 +34,7 @@ def registry_file(paths: Paths):
     """The hook registration file: the checkout's first, then ``KAIOS_HOME``."""
     candidates = []
     if paths.repo is not None:
-        candidates.append(paths.repo / ".github" / "hooks" / "kaios.json")
+        candidates.append(paths.repo / events_mod.REGISTRY_RELATIVE)
     candidates.append(paths.hooks_json)
     for candidate in candidates:
         if candidate.is_file():
@@ -42,7 +43,15 @@ def registry_file(paths: Paths):
 
 
 def registry_events(path) -> list:
-    """Event names the registration file registers, in file order."""
+    """Event names one registration file registers, in file order.
+
+    Addressed by path rather than by repository root, because the installed
+    registry under ``KAIOS_HOME/hooks`` is not at the checkout-relative
+    location, and reported without a fallback, because ISC-11's falsifier is a
+    registry naming fewer than eight events. ``kaios.events.registry_events``
+    is the root-relative reader and substitutes ``EVENTS`` when the file cannot
+    be read, which would hide exactly that.
+    """
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
