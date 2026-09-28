@@ -37,11 +37,12 @@ EVENTS: tuple[str, ...] = (
     "Stop",
 )
 
-#: Where the authoritative registry lives inside a checkout.
+#: Where the authoritative registry lives inside a checkout. This is the one
+#: definition of that path; ``setup`` and ``doctor`` import it rather than
+#: spelling it again. The installed copy's location is deliberately NOT here:
+#: ``Paths.hooks_json`` owns it, because resolving locations under KAIOS_HOME is
+#: what ``paths`` is for, and a second definition is the problem we removed.
 REGISTRY_RELATIVE = ".github/hooks/kaios.json"
-
-#: Where ``setup render`` writes the installed copy, relative to KAIOS_HOME.
-INSTALLED_REGISTRY_RELATIVE = "hooks/kaios.json"
 
 
 def read_registry(path: Path | str) -> tuple[str, ...]:

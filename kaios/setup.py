@@ -18,13 +18,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import isa as isa_mod
-from .events import EVENTS
+from .events import EVENTS, REGISTRY_RELATIVE
 from .paths import Paths
 
 PROBE_TIMEOUT = 10
 COPILOT_DIRS = ("agents", "skills", "hooks", "instructions")
 WRAPPER_RELATIVE = ".github/hooks/kaios.ps1"
-HOOKS_REGISTRY_RELATIVE = ".github/hooks/kaios.json"
+
+#: The checked-in registry path. Defined once, in ``kaios.events``.
+HOOKS_REGISTRY_RELATIVE = REGISTRY_RELATIVE
 
 CONFIG_SKELETON: dict = {
     "installed_at": None,

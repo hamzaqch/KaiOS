@@ -8,6 +8,7 @@ user-level install and left a live one unregistered. Reading two files by hand
 is what caught it; these tests are so nobody has to.
 """
 
+import ast
 import json
 import shutil
 import tempfile
@@ -15,6 +16,7 @@ import unittest
 from pathlib import Path
 
 from kaios import events as events_mod
+from kaios.paths import Paths
 from tests.support import repo_root
 
 
@@ -69,9 +71,11 @@ class PathAddressedReaderTests(unittest.TestCase):
         return target
 
     def test_it_reads_any_path_not_just_a_repository_root(self) -> None:
-        installed = self.scratch / events_mod.INSTALLED_REGISTRY_RELATIVE
+        """The installed registry sits nowhere near the checked-in relative path."""
+        installed = Paths(home=self.scratch / "home").hooks_json
         installed.parent.mkdir(parents=True, exist_ok=True)
         installed.write_text(json.dumps({"hooks": {"Stop": [{}], "SessionStart": [{}]}}), encoding="utf-8")
+        self.assertFalse(str(installed).endswith(events_mod.REGISTRY_RELATIVE))
         self.assertEqual(events_mod.read_registry(installed), ("Stop", "SessionStart"))
 
     def test_it_preserves_file_order(self) -> None:
@@ -102,6 +106,70 @@ class PathAddressedReaderTests(unittest.TestCase):
         target = self._write(json.dumps({"hooks": {"Stop": [{}]}}))
         self.assertEqual(events_mod.read_registry(target), ("Stop",))
         self.assertNotEqual(events_mod.read_registry(target), events_mod.EVENTS)
+
+
+class OneDefinitionTests(unittest.TestCase):
+    """Each registry location is written down exactly once in the package.
+
+    Both registry paths had picked up second and third definitions: the
+    checked-in one in `kaios.events` and again in `kaios.setup`, plus a third
+    spelling built piece by piece in `kaios.doctor`, and the installed one as a
+    constant in `kaios.events` beside the `Paths.hooks_json` that already owned
+    it. They agreed at the time, which is exactly why nothing caught them.
+    """
+
+    CHECKED_IN = ".github/hooks/kaios.json"
+
+    def _module_sources(self):
+        for path in sorted((repo_root() / "kaios").glob("*.py")):
+            yield path, path.read_text(encoding="utf-8")
+
+    def test_the_checked_in_path_is_assigned_in_exactly_one_module(self) -> None:
+        assigners = []
+        for path, source in self._module_sources():
+            tree = ast.parse(source, filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+                    if node.value.value == self.CHECKED_IN:
+                        assigners.append(path.name)
+        self.assertEqual(
+            assigners,
+            ["events.py"],
+            "the checked-in registry path is assigned as a literal in %s; it belongs "
+            "only in events.py" % (assigners or "nowhere"),
+        )
+
+    def test_the_constant_is_the_path_it_claims_to_be(self) -> None:
+        self.assertEqual(events_mod.REGISTRY_RELATIVE, self.CHECKED_IN)
+        self.assertTrue((repo_root() / events_mod.REGISTRY_RELATIVE).is_file())
+
+    def test_setup_reuses_the_constant_rather_than_restating_it(self) -> None:
+        from kaios import setup as setup_mod
+
+        self.assertIs(setup_mod.HOOKS_REGISTRY_RELATIVE, events_mod.REGISTRY_RELATIVE)
+
+    def test_only_paths_builds_a_registry_location_from_segments(self) -> None:
+        """``paths.py`` is the owner, so it is the one module allowed to compose it.
+
+        Anywhere else, assembling ``hooks`` and ``kaios.json`` by hand is a new
+        definition of a location that already has one. That is how ``doctor``
+        ended up with a third spelling of the checked-in path.
+        """
+        offenders = [
+            path.name
+            for path, source in self._module_sources()
+            if path.name != "paths.py" and '"hooks"' in source and '"kaios.json"' in source
+        ]
+        self.assertEqual(offenders, [], "%s spells a registry location in pieces" % offenders)
+
+    def test_the_installed_location_lives_only_in_paths(self) -> None:
+        self.assertFalse(
+            hasattr(events_mod, "INSTALLED_REGISTRY_RELATIVE"),
+            "events should not name the installed location; Paths.hooks_json owns it",
+        )
+        resolved = Paths(home=Path("/tmp/kaios-probe-home")).hooks_json
+        self.assertEqual(resolved.name, "kaios.json")
+        self.assertEqual(resolved.parent.name, "hooks")
 
 
 class HookModuleAgreementTests(unittest.TestCase):

@@ -9,6 +9,7 @@ from __future__ import annotations
 import sys
 
 from . import __version__, integrity
+from .events import REGISTRY_RELATIVE
 from . import isa as isa_mod
 from . import memory as memory_mod
 from . import models as models_mod
@@ -113,9 +114,11 @@ def _models(paths: Paths) -> dict:
 
 
 def _hooks(paths: Paths) -> dict:
+    # The installed location comes from Paths, the checked-in one from events.
+    # Neither is spelled out here; a third spelling is how they drift apart.
     candidates = [paths.hooks_json]
     if paths.repo is not None:
-        candidates.append(paths.repo / ".github" / "hooks" / "kaios.json")
+        candidates.append(paths.repo / REGISTRY_RELATIVE)
     found = [str(c) for c in candidates if c.is_file()]
     if found:
         return _check("hooks registry", PASS, ", ".join(found))
