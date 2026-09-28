@@ -59,17 +59,27 @@ case "$event" in
 esac
 
 # Where `import kaios` resolves from, in priority order:
-#   1. $KAIOS_REPO                        (set by Install.ps1)
-#   2. $KAIOS_HOME/lib                    (package copy Install.ps1 refreshes)
-#   3. the repo this wrapper lives in     (the KaiOS checkout itself)
+#   1. $KAIOS_REPO/.github                (KAIOS_REPO names the checkout root)
+#   2. $KAIOS_REPO                        (or it already names the .github dir)
+#   3. $KAIOS_HOME/lib                    (package copy Install.ps1 refreshes)
+#   4. the directory above this wrapper   (.github itself, since the wrapper
+#                                          lives in .github/hooks)
+# The whole framework lives under .github, so candidate 4 needs no environment at
+# all: the package sits beside this script's parent.
 script_dir=$(cd "$(dirname "$0")" && pwd -P)
-repo_root=''
+framework_dir=''
 if [ -n "$script_dir" ]; then
-    repo_root=$(cd "$script_dir/../.." && pwd -P)
+    framework_dir=$(cd "$script_dir/.." && pwd -P)
+fi
+
+kaios_repo=${KAIOS_REPO:-}
+repo_framework=''
+if [ -n "$kaios_repo" ]; then
+    repo_framework=$kaios_repo/.github
 fi
 
 package_root=''
-for candidate in "${KAIOS_REPO:-}" "$kaios_home/lib" "$repo_root"; do
+for candidate in "$repo_framework" "$kaios_repo" "$kaios_home/lib" "$framework_dir"; do
     [ -n "$candidate" ] || continue
     if [ -f "$candidate/kaios/__init__.py" ]; then
         package_root=$candidate

@@ -22,7 +22,7 @@ Clone the repository, then run the installer from its root.
 ```
 git clone <your-fork-url> KaiOS
 cd KaiOS
-powershell -ExecutionPolicy Bypass -File Install.ps1
+powershell -ExecutionPolicy Bypass -File .github\scripts\Install.ps1
 ```
 
 The installer copies the agents, skills and instructions into your user-level Copilot directory, creates the KaiOS home tree, installs the doctrine copy, renders the hook registry with absolute paths, and sets `KAIOS_HOME` if it is not already set. It compares file contents before writing, so running it twice reports `0 files changed`.
@@ -32,15 +32,17 @@ Open VS Code and confirm hooks are enabled. In Settings, `chat.useHooks` must be
 To scaffold a specific repository instead of relying on the user-level install, run the workspace initializer against it. It never overwrites an existing file.
 
 ```
-powershell -ExecutionPolicy Bypass -File Init-Workspace.ps1 -Path C:\work\my-repo
+powershell -ExecutionPolicy Bypass -File .github\scripts\Init-Workspace.ps1 -Path C:\work\my-repo
 ```
+
+The whole framework lives in `.github`, so that is one directory copy: the constitution, the instructions, the agents, the skills, the hook registry and wrappers, the Python package and the doctrine tree all land under `<repo>\.github`. The framework's own `scripts` and `tests` stay behind, because a work repository consumes KaiOS rather than building it.
 
 ## Hook probe
 
 Hooks fail silently when they fail, which is the worst possible property, so check them directly.
 
 ```
-powershell -ExecutionPolicy Bypass -File scripts\Probe-Hooks.ps1
+powershell -ExecutionPolicy Bypass -File .github\scripts\Probe-Hooks.ps1
 ```
 
 The probe pipes a sample event into the wrapper for all eight events and prints a row per event with its exit code and whether stdout was valid JSON. Every row must pass. The wrapper is built so that a missing interpreter, a missing package or a crashing hook still produces `{"continue": true}` and exit 0, so a passing probe before the Python package is in place is expected rather than a skipped test.
@@ -73,13 +75,13 @@ KaiOS works with none of these and gets better with each. Nothing in this table 
 
 ## Layout
 
+Everything KaiOS is lives in one directory. The repository root holds a README and this repository's own ideal state, and nothing else.
+
 ```
 KaiOS/
   README.md
-  Install.ps1                      user-level install
-  Init-Workspace.ps1               scaffold one repository
-  Uninstall.ps1
   ISA.md                           this repository's own ideal state
+  .gitignore
   .github/
     copilot-instructions.md        the constitution, always loaded
     instructions/*.instructions.md path-scoped rules with applyTo globs
@@ -88,13 +90,27 @@ KaiOS/
     hooks/kaios.json               all eight chat events, in both Copilot hook dialects
     hooks/kaios.ps1                Windows wrapper around the Python runner
     hooks/kaios.sh                 the same wrapper for a POSIX host
-  .vscode/
-    mcp.json.template              rendered by setup
-    mcp.example.json               what a configured registry looks like
-  kaios/                           Python package, standard library only
-  SYSTEM/                          doctrine and templates, installed to KAIOS_HOME\SYSTEM
-  scripts/                         Test-PS51.ps1, Probe-Hooks.ps1
-  tests/
+    kaios/                         Python package, standard library only
+    SYSTEM/                        doctrine and templates, installed to KAIOS_HOME\SYSTEM
+    SYSTEM/TEMPLATES/mcp.json.template   rendered into a repository's .vscode/mcp.json
+    scripts/                       Install.ps1, Init-Workspace.ps1, Uninstall.ps1,
+                                   Test-PS51.ps1, Probe-Hooks.ps1
+    tests/                         the suite
+```
+
+One folder is the whole point: it carries the framework into any work repository in a single copy, and Copilot already discovers everything under `.github` without being told where to look.
+
+Because the package sits at `.github\kaios`, the import root is `.github`:
+
+```
+set PYTHONPATH=.github
+python -m kaios doctor
+```
+
+Run the tests from the repository root:
+
+```
+python -m unittest discover -s .github/tests -t .github
 ```
 
 Runtime state lives under `KAIOS_HOME`, which defaults to `.kaios` in your user profile. Config, your profile and project table, memory, the ISA registry and the observability logs are all there, and none of it is ever committed. Run `python -m kaios paths` to print every resolved path.
@@ -112,7 +128,7 @@ Copilot exposes models from several vendors. KaiOS uses them by role and never b
 | `third` | a third vendor's opinion, and very long context |
 | `research` | reading the web and large document sets |
 
-The registry is `SYSTEM/CONFIG/models.json`, installed to `$KAIOS_HOME/SYSTEM/CONFIG/models.json`. Each agent file carries a `kaios-role` marker on its first body line, and the registry is what decides which models that role resolves to.
+The registry is `.github/SYSTEM/CONFIG/models.json`, installed to `$KAIOS_HOME/SYSTEM/CONFIG/models.json`. Each agent file carries a `kaios-role` marker on its first body line, and the registry is what decides which models that role resolves to.
 
 ```
 python -m kaios models show
@@ -130,15 +146,15 @@ Hooks never write to stderr and never exit non-zero; anything that goes wrong is
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Every command denied, hook shown as erroring | The workspace is not the KaiOS checkout and the `kaios` package could not be imported (first field report) | `git pull` in the KaiOS clone, re-run `Install.ps1` (it copies the package to `%KAIOS_HOME%\lib` and sets `KAIOS_REPO`), open a new VS Code window |
-| Message says the hook file must be repaired, tools blocked until then | The registry was in the wrong dialect for the Copilot CLI engine | `git pull`, re-run `Install.ps1`; the user-level copy lives at `%USERPROFILE%\.copilot\hooks\kaios.json` |
+| Every command denied, hook shown as erroring | The workspace is not the KaiOS checkout and the `kaios` package could not be imported (first field report) | `git pull` in the KaiOS clone, re-run `.github\scripts\Install.ps1` (it copies the package to `%KAIOS_HOME%\lib` and sets `KAIOS_REPO`), open a new VS Code window |
+| Message says the hook file must be repaired, tools blocked until then | The registry was in the wrong dialect for the Copilot CLI engine | `git pull`, re-run `.github\scripts\Install.ps1`; the user-level copy lives at `%USERPROFILE%\.copilot\hooks\kaios.json` |
 | Hooks silent, no log lines | Hook files not discovered | Run `Chat: Configure Hooks`, confirm `chat.useHooks` is on and the workspace is trusted |
 | Need hooks off right now | | Set the user environment variable `KAIOS_HOOKS_DISABLED=1` and restart VS Code; every hook then answers `{"continue": true}` |
 
 ## Uninstall
 
 ```
-powershell -ExecutionPolicy Bypass -File Uninstall.ps1
+powershell -ExecutionPolicy Bypass -File .github\scripts\Uninstall.ps1
 ```
 
 This removes only what the installer put in your user-level Copilot directory, and it derives that list from this checkout, so anything you added yourself is left alone. Add `-WhatIf` to see the plan without touching anything.
@@ -146,7 +162,7 @@ This removes only what the installer put in your user-level Copilot directory, a
 Your KaiOS home is deliberately left in place, because it holds your memory, your ISA registry and your configuration. Deleting it takes both flags.
 
 ```
-powershell -ExecutionPolicy Bypass -File Uninstall.ps1 -PurgeHome -Force
+powershell -ExecutionPolicy Bypass -File .github\scripts\Uninstall.ps1 -PurgeHome -Force
 ```
 
 The `KAIOS_HOME` environment variable is never removed automatically. Clear it from System Properties if you want it gone.

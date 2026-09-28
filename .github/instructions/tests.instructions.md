@@ -1,7 +1,7 @@
 ---
 name: tests
 description: Rules for the test suite — a test exists to fail on a real defect, runs with no network and no installed extras, and is named after the claim it closes.
-applyTo: "tests/**"
+applyTo: "**/tests/**"
 version: 1.0.0
 last_updated: 2026-09-28T00:00:00Z
 convention: kaios-freshness-v1
@@ -23,14 +23,14 @@ The suite runs with **no network, no installed extras, and no optional tool pres
 
 ## Naming
 
-`tests/test_<module>.py`, and each test function named after the claim it closes rather than the function it calls. `test_reject_row_lands_in_reject_table`, not `test_ingest_2`. When a test closes a claim from an ISA, the claim identifier goes in the docstring so the evidence stub can point at the test by name.
+`.github/tests/test_<module>.py` for this framework, or the work repository's own tests directory, and each test function named after the claim it closes rather than the function it calls. `test_reject_row_lands_in_reject_table`, not `test_ingest_2`. When a test closes a claim from an ISA, the claim identifier goes in the docstring so the evidence stub can point at the test by name.
 
 ## Shape
 
 - One behaviour per test. A test asserting six things tells you one of six broke.
 - Arrange, act, assert, with the assert saying what was expected in its message.
 - `tempfile.TemporaryDirectory()` for anything touching disk. No test writes outside its own temporary directory, and no test depends on another test's leftovers.
-- Fixtures as real files under `tests/fixtures/`, not as string literals buried in the test. A fixture you can open in an editor is a fixture you can debug.
+- Fixtures as real files under `.github/tests/fixtures/`, not as string literals buried in the test. A fixture you can open in an editor is a fixture you can debug.
 - No sleeps. If a test needs to wait for something, it is testing the wrong seam.
 - Deterministic. No real clock, no random seed left unset, no ordering dependence between tests.
 
@@ -50,7 +50,7 @@ for command, expected in CASES:
 
 ## What the suite must cover
 
-- **Containment.** Every term in `tests/containment.txt` greps to zero hits across the repository. One hit fails the build.
+- **Containment.** Every term in `.github/tests/containment.txt` greps to zero hits across the repository. One hit fails the build.
 - **Imports.** No module imports outside the standard library.
 - **Hooks.** Every module: its rule fires on the case it exists for, it stays quiet otherwise, and a module that raises still yields valid JSON with the session continuing.
 - **Skills and agents.** Frontmatter schema, and for agents that the generated model list matches what the registry resolves.

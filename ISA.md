@@ -1,6 +1,6 @@
 ---
-phase: climbing
-progress: 40/41
+phase: complete
+progress: 42/42
 task: "Build KaiOS: a full harness of the reference class for Copilot in VS Code"
 slug: kaios
 started: 2026-09-28T00:00:00Z
@@ -118,7 +118,8 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 
 - [x] ISC-39: the `create-workflow` skill plus `workflow_tool.py` interview the user to pick a kind (KaiOS multi-agent workflow, GitHub Actions workflow, Databricks job/bundle workflow), scaffold it (`workflow.json` spec + orchestrator `.agent.md` with handoffs; or `.github/workflows/<name>.yml`; or `resources/<name>.job.yml` bundle resource), validate it (`workflow_tool.py validate <file>` exits 1 on a malformed spec or YAML shape), and track runs in `$KAIOS_HOME/MEMORY/STATE/workflows.json`. Falsifier: scaffold each kind from a fixture answers file and validate; seeded broken spec fails. — evidence: test_workflow 34 OK (c525246)
 - [x] ISC-40: the hook wrapper works from any workspace, not only the KaiOS checkout: with only `KAIOS_REPO` set, or only `%KAIOS_HOME%\lib\kaios` present, a force-push payload from a foreign workspace returns a real `deny` with zero bytes on stderr; with neither, it logs to `hook-errors.log`, still writes zero stderr, and returns continue; `KAIOS_HOOKS_DISABLED=1` short-circuits. Falsifier: `tests/test_foreign_workspace.py`. — evidence: test_foreign_workspace 4 OK; Install.ps1 copies 179 files incl. lib/kaios
-- [ ] ISC-41: one hook registry is valid in both Copilot engines. The VS Code Local harness (PascalCase events, `command`/`windows`) and the Copilot CLI engine (camelCase events, `bash`/`powershell`/`timeoutSec`, fail-closed on preToolUse errors) both load every hook from `.github/hooks/kaios.json` with no hook firing twice; the runner emits both output dialects (`hookSpecificOutput.permissionDecision` and top-level `permissionDecision`; `continue:false`+`stopReason` and `decision:"block"`+`reason`) and reads both stdin dialects (`tool_input`/`toolArgs`). Falsifier: `tests/test_registry_dialects.py` plus a CLI-dialect payload through `kaios.sh`/`kaios.ps1` returning a deny.
+- [x] ISC-41: one hook registry is valid in both Copilot engines. The VS Code Local harness (PascalCase events, `command`/`windows`) and the Copilot CLI engine (camelCase events, `bash`/`powershell`/`timeoutSec`, fail-closed on preToolUse errors) both load every hook from `.github/hooks/kaios.json` with no hook firing twice; the runner emits both output dialects (`hookSpecificOutput.permissionDecision` and top-level `permissionDecision`; `continue:false`+`stopReason` and `decision:"block"`+`reason`) and reads both stdin dialects (`tool_input`/`toolArgs`). Falsifier: `tests/test_registry_dialects.py` plus a CLI-dialect payload through `kaios.sh`/`kaios.ps1` returning a deny. — evidence: test_registry_dialects + probe 16/16 both dialects, kaios.sh deny (9611aa2)
+- [x] ISC-42: the entire framework lives under `.github/` (`kaios/`, `SYSTEM/`, `scripts/`, `tests/` beside `instructions/`, `agents/`, `skills/`, `hooks/`); the repo root holds only README, ISA, `.gitignore`, `.vscode`; `Init-Workspace.ps1` carries one folder into a work repo; wrappers find the package beside themselves with no env vars set; tests run via `python -m unittest discover -s .github/tests -t .github`. Falsifier: `ls` of the root, the discover run, and a foreign-workspace deny with an empty environment. — evidence: root = README+ISA only; discover 446 OK; empty-env foreign-workspace deny, 0 stderr
 
 ## Anti-claims
 
@@ -145,6 +146,7 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 - D3: Doctrine is rewritten, never copied, to guarantee zero personal residue.
 - D4: Dashboard dropped per principal; observability is the ISA plus JSONL logs.
 - D5: doctrine tree renamed `KAIOS/` → `SYSTEM/` because it collided with the `kaios/` package on case-insensitive filesystems (Windows, macOS). Found by the core builder before any Windows checkout existed.
+- D9: the whole framework lives under `.github/` so one folder carries it into any work repo and Copilot discovers all of it; README and ISA stay at the root. Two bugs surfaced by the move (doctrine-path classifier, dead rendered PYTHONPATH) were fixed with tests.
 - D8: the ISA goal field is `stated_goal` everywhere (template, parser, doctrine); the longer spelling was dropped so the shipped format carries no principal wording.
 - D7: `tests/` is a package (`__init__.py`) so stdlib discovery finds every test; test modules import helpers as `from tests.support import …`. Found when discovery reported 0 tests.
 - D6: the verbatim goal names the reference system, so it is held in a private task ISA outside the repo; the shipped ISA carries a paraphrase. Containment (ISC-2) outranks verbatim-in-repo.
@@ -157,6 +159,7 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 ## Log
 
 - 2026-09-28: ISA scaffolded; build fan-out begins.
+- 2026-09-28: principal directed "everything should be inside the .github" → ISC-42; README and ISA stay at the root as repo metadata (⚠️ assumption stated to principal).
 - 2026-09-28 (field incident 2, reopened): after the package fix, work reported "until .github/hooks/kaios.json is repaired it will still block; I can't find that file". Traced in VS Code source (hookTypes.ts, hookCompatibility.ts, hookSchema.ts, hookExecutor.ts) and GitHub's hooks reference: two engines read the same folder; the Copilot CLI engine wants camelCase events with `bash`/`powershell`/`timeoutSec`, drops mismatched items, and fails closed on preToolUse. Our file was in the VS Code Local dialect only. Fix: one dual-dialect registry (ISC-41). The missing file is the user-level copy at `%USERPROFILE%\.copilot\hooks\kaios.json`.
 - 2026-09-28 (field incident, reopened): first use at work reported "pre-tool hook erroring, every command denied". Reproduced here: in a workspace scaffolded by Init-Workspace.ps1 the wrapper ran `python -m kaios.hooks` with no `kaios` on the path, wrote ModuleNotFoundError to stderr, and the harness failed closed. Fix: wrapper resolves the package (KAIOS_REPO → KAIOS_HOME/lib → own repo), sets PYTHONPATH, logs child stderr to a file, adds a kill switch; Install.ps1 copies the package to lib and sets KAIOS_REPO. Regression test added (ISC-40). Lesson: "verified in the checkout" was an example claim; the universal claim is "verified from any workspace".
 - 2026-09-28: six parallel builders (doctrine, core, thinking skills, system skills, agents/installers, workflow) then hooks; each builder cross-audited neighbours' files with independent validators; three stale cross-agent findings were caught by re-verification, which drove the two snapshot commits and datable integrity reports.
@@ -165,7 +168,7 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 
 ## Remaining Work
 
-- [ ] Confirm on the work machine that the fix clears the denial and capture the exact harness error text for the record.
+- [ ] Confirm on the work machine that both fixes (package resolution, dual-engine registry) clear the denial and capture the exact harness error text for the record.
 - [ ] Run on a real Windows machine: `Install.ps1`, `Probe-Hooks.ps1` and `Test-PS51.ps1` were verified here under PowerShell 7 with 5.1 tokens banned by the parser check, not under a real Windows PowerShell 5.1 host.
 - [ ] Capture the real Copilot stdin schema on first run (`MEMORY/OBSERVABILITY/hook-events.jsonl`) and tighten the hooks' field reads from tolerant `get()` to the observed shape.
 - [ ] Confirm the model names the org enabled in Copilot's picker and run `python -m kaios models set <role> …` then `models apply`; the shipped defaults are placeholders from the registry.

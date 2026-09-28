@@ -25,7 +25,7 @@ Banned tokens — each one parses on newer versions and is a syntax error on 5.1
 | `foreach -Parallel`, `ForEach-Object -Parallel` | a plain loop |
 | `$PSStyle`, `Join-String`, `Get-Uptime` | none of these exist on 5.1 |
 
-`scripts/Test-PS51.ps1` runs the parser with these tokens banned. A hit fails the build.
+`.github/scripts/Test-PS51.ps1` runs the parser with these tokens banned. A hit fails the build.
 
 ## Every script starts the same way
 

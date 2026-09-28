@@ -62,15 +62,22 @@ function Write-HookLog {
 
 function Resolve-PackageRoot {
     # Where `import kaios` resolves from, in priority order:
-    #   1. $env:KAIOS_REPO                      (set by Install.ps1)
-    #   2. <KAIOS_HOME>\lib                     (package copy made by Install.ps1)
-    #   3. the repo this wrapper lives in       (the KaiOS checkout itself)
+    #   1. $env:KAIOS_REPO\.github              (KAIOS_REPO names the checkout root)
+    #   2. $env:KAIOS_REPO                      (or it already names the .github dir)
+    #   3. <KAIOS_HOME>\lib                     (package copy made by Install.ps1)
+    #   4. the directory above this wrapper     (.github itself, since the wrapper
+    #                                            lives in .github\hooks)
+    # The whole framework lives under .github, so candidate 4 needs no environment
+    # at all: the package sits beside this script's parent.
     [CmdletBinding()]
-    param([string]$RepoRoot)
+    param([string]$FrameworkDir)
     $candidates = @()
-    if ($env:KAIOS_REPO) { $candidates += $env:KAIOS_REPO }
+    if ($env:KAIOS_REPO) {
+        $candidates += (Join-Path $env:KAIOS_REPO '.github')
+        $candidates += $env:KAIOS_REPO
+    }
     $candidates += (Join-Path (Get-KaiosHome) 'lib')
-    if ($RepoRoot) { $candidates += $RepoRoot }
+    if ($FrameworkDir) { $candidates += $FrameworkDir }
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath (Join-Path (Join-Path $candidate 'kaios') '__init__.py')) {
             return $candidate
@@ -150,9 +157,11 @@ try {
     if (-not $scriptDir) {
         $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
     }
-    $repoRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
-    if (-not $repoRoot) {
-        $repoRoot = (Get-Location).Path
+    # The wrapper lives at <repo>\.github\hooks, so one level up is .github —
+    # which is the import root for the package that lives at .github\kaios.
+    $frameworkDir = Split-Path -Parent $scriptDir
+    if (-not $frameworkDir) {
+        $frameworkDir = (Get-Location).Path
     }
 
     $launcher = Resolve-PythonLauncher
@@ -162,7 +171,7 @@ try {
         exit 0
     }
 
-    $packageRoot = Resolve-PackageRoot -RepoRoot $repoRoot
+    $packageRoot = Resolve-PackageRoot -FrameworkDir $frameworkDir
     if (-not $packageRoot) {
         Write-HookLog -Text 'kaios package not found: set KAIOS_REPO or re-run Install.ps1'
         Write-HookResult -Text $FallbackJson

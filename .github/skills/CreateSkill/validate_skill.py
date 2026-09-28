@@ -230,8 +230,9 @@ def check_links(directory, findings):
                 if not target or target.startswith("<"):
                     continue
                 # A link resolves against the file that contains it, or, because
-                # docs here write paths like SYSTEM/DOCUMENTATION/X.md freely,
-                # against the repository root. Either form counts as resolved.
+                # docs here write paths like .github/SYSTEM/DOCUMENTATION/X.md
+                # freely, against the repository root. Either form counts as
+                # resolved.
                 if link_resolves(root, target, base):
                     continue
                 findings.append(

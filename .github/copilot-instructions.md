@@ -147,26 +147,29 @@ The registry is `$KAIOS_HOME/SYSTEM/CONFIG/models.json`; `python -m kaios models
 
 ## Routing Table
 
-Paths are relative to `$KAIOS_HOME` unless they start with `.github/`, which is relative to the repository root.
+Two roots. A path starting `.github/` is relative to the repository root, where the whole framework lives. Every other path is relative to `$KAIOS_HOME`, the installed runtime tree.
+
+The doctrine tree exists in both places: `.github/SYSTEM/` in any repository KaiOS was scaffolded into, and `$KAIOS_HOME/SYSTEM/` as the installed copy. Read whichever is reachable; they are the same files.
 
 | What | Where |
 |---|---|
 | This constitution | `.github/copilot-instructions.md` |
 | Path-scoped rules | `.github/instructions/*.instructions.md` |
-| The Algorithm | `SYSTEM/ALGORITHM/LATEST` then `SYSTEM/ALGORITHM/v<version>.md` |
-| Verification rules | `SYSTEM/RULES/Verification.md` |
-| Where a new rule lives | `SYSTEM/RULES/SelfHealing.md` |
-| Why the system is shaped this way | `SYSTEM/RULES/Philosophy.md` |
-| ISA file format | `SYSTEM/DOCUMENTATION/ISAFormat.md` |
-| Model roles and vendor strategy | `SYSTEM/DOCUMENTATION/ModelRouting.md` |
-| System map | `SYSTEM/DOCUMENTATION/Architecture.md` |
-| Hook events and the shipped hooks | `SYSTEM/DOCUMENTATION/Hooks.md` |
-| Skills | `.github/skills/<Name>/SKILL.md` · `SYSTEM/DOCUMENTATION/Skills.md` |
-| Agents and their roles | `.github/agents/*.agent.md` · `SYSTEM/DOCUMENTATION/Agents.md` |
-| Memory layout and record shapes | `SYSTEM/DOCUMENTATION/Memory.md` |
-| First-run install and interview | `SYSTEM/DOCUMENTATION/Setup.md` |
-| Model registry | `SYSTEM/CONFIG/models.json` |
-| Detected tools and your choices | `SYSTEM/CONFIG/config.json` |
+| The Algorithm | `.github/SYSTEM/ALGORITHM/LATEST` then `.github/SYSTEM/ALGORITHM/v<version>.md` |
+| Verification rules | `.github/SYSTEM/RULES/Verification.md` |
+| Where a new rule lives | `.github/SYSTEM/RULES/SelfHealing.md` |
+| Why the system is shaped this way | `.github/SYSTEM/RULES/Philosophy.md` |
+| ISA file format | `.github/SYSTEM/DOCUMENTATION/ISAFormat.md` |
+| Model roles and vendor strategy | `.github/SYSTEM/DOCUMENTATION/ModelRouting.md` |
+| System map | `.github/SYSTEM/DOCUMENTATION/Architecture.md` |
+| Hook events and the shipped hooks | `.github/SYSTEM/DOCUMENTATION/Hooks.md` |
+| Skills | `.github/skills/<Name>/SKILL.md` · `.github/SYSTEM/DOCUMENTATION/Skills.md` |
+| Agents and their roles | `.github/agents/*.agent.md` · `.github/SYSTEM/DOCUMENTATION/Agents.md` |
+| Memory layout and record shapes | `.github/SYSTEM/DOCUMENTATION/Memory.md` |
+| First-run install and interview | `.github/SYSTEM/DOCUMENTATION/Setup.md` |
+| The Python package and the hooks | `.github/kaios/` — import root is `.github` |
+| Model registry | `.github/SYSTEM/CONFIG/models.json` |
+| Detected tools and your choices | `CONFIG/config.json` |
 | Your profile and projects | `USER/PROFILE.md` · `USER/PROJECTS.md` |
 | Project ISA · task ISA | `<repo>/ISA.md` · `MEMORY/WORK/<slug>/ISA.md` |
 | Everything the CLI can do | `python -m kaios --help` |

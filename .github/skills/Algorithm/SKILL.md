@@ -104,7 +104,7 @@ Match intelligence and verification depth to what the work turns out to be, and 
 - Scoped execution runs at **high**. Formatting, renames and mechanical edits run at **medium**.
 - A second opinion runs at **cross**, a third vendor's read or a very long context at **third**, and web or document research at **research**.
 - The engineer's plain-language instruction outranks all of this. "Quick pass" means quick.
-- Never name a model in prose. Roles are the vocabulary; `SYSTEM/CONFIG/models.json` holds the lineup and `python -m kaios models apply` propagates it.
+- Never name a model in prose. Roles are the vocabulary; `.github/SYSTEM/CONFIG/models.json` holds the lineup and `python -m kaios models apply` propagates it.
 
 ## Tool contracts
 

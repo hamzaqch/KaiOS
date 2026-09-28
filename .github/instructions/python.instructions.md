@@ -72,4 +72,4 @@ Never return a sentinel that looks like success. If a function cannot do its job
 
 ## Tests
 
-Every module has a test. Every hook module has a test that proves its rule fires and a test that proves it stays quiet when it should. See `tests/**`.
+Every module has a test. Every hook module has a test that proves its rule fires and a test that proves it stays quiet when it should. See `.github/tests/**`.
