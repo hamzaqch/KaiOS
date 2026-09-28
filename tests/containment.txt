@@ -1,0 +1,11 @@
+LifeOS
+lifeos
+Pulse dashboard
+/home/
+/Users/
+C:\Users\
+~/.claude
+.claude/
+Interceptor
+Arbol
+Bunker
