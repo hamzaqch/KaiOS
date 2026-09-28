@@ -9,7 +9,10 @@ is what caught it; these tests are so nobody has to.
 """
 
 import json
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
 
 from kaios import events as events_mod
 from tests.support import repo_root
@@ -36,12 +39,69 @@ class RegistryAgreementTests(unittest.TestCase):
         self.assertEqual(len(events_mod.EVENTS), 8)
         self.assertEqual(len(set(events_mod.EVENTS)), 8, "an event name is repeated")
 
-    def test_the_registry_reader_falls_back_rather_than_raising(self) -> None:
+    def test_the_root_addressed_reader_falls_back_rather_than_raising(self) -> None:
         self.assertEqual(events_mod.registry_events(self.root / "nowhere"), events_mod.EVENTS)
 
-    def test_the_reader_raises_in_strict_mode(self) -> None:
-        with self.assertRaises((OSError, ValueError, KeyError, TypeError)):
+    def test_the_root_addressed_reader_raises_in_strict_mode(self) -> None:
+        with self.assertRaises((OSError, ValueError)):
             events_mod.registry_events(self.root / "nowhere", strict=True)
+
+
+class PathAddressedReaderTests(unittest.TestCase):
+    """``read_registry`` is for a caller that must not paper over a bad registry.
+
+    ``kaios hooks list`` reports how many events are registered, and ISC-11's
+    falsifier is that count coming back under eight. A reader that substituted
+    the default on an unreadable file would report eight for a registry with
+    none, hiding the one condition the claim exists to catch.
+    """
+
+    def setUp(self) -> None:
+        self._dir = tempfile.mkdtemp(prefix="kaios-events-")
+        self.scratch = Path(self._dir)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self._dir, ignore_errors=True)
+
+    def _write(self, text: str) -> Path:
+        target = self.scratch / "kaios.json"
+        target.write_text(text, encoding="utf-8")
+        return target
+
+    def test_it_reads_any_path_not_just_a_repository_root(self) -> None:
+        installed = self.scratch / events_mod.INSTALLED_REGISTRY_RELATIVE
+        installed.parent.mkdir(parents=True, exist_ok=True)
+        installed.write_text(json.dumps({"hooks": {"Stop": [{}], "SessionStart": [{}]}}), encoding="utf-8")
+        self.assertEqual(events_mod.read_registry(installed), ("Stop", "SessionStart"))
+
+    def test_it_preserves_file_order(self) -> None:
+        target = self._write(json.dumps({"hooks": {"Stop": [{}], "PreToolUse": [{}]}}))
+        self.assertEqual(events_mod.read_registry(target), ("Stop", "PreToolUse"))
+
+    def test_a_missing_file_raises(self) -> None:
+        with self.assertRaises(OSError):
+            events_mod.read_registry(self.scratch / "absent.json")
+
+    def test_malformed_json_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            events_mod.read_registry(self._write("{not json"))
+
+    def test_a_registry_with_no_hooks_object_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            events_mod.read_registry(self._write(json.dumps({"version": 1})))
+
+    def test_an_empty_hooks_object_raises_rather_than_reporting_zero(self) -> None:
+        with self.assertRaises(ValueError):
+            events_mod.read_registry(self._write(json.dumps({"hooks": {}})))
+
+    def test_a_json_array_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            events_mod.read_registry(self._write(json.dumps([1, 2, 3])))
+
+    def test_it_never_substitutes_the_default(self) -> None:
+        target = self._write(json.dumps({"hooks": {"Stop": [{}]}}))
+        self.assertEqual(events_mod.read_registry(target), ("Stop",))
+        self.assertNotEqual(events_mod.read_registry(target), events_mod.EVENTS)
 
 
 class HookModuleAgreementTests(unittest.TestCase):
@@ -69,14 +129,22 @@ class HookModuleAgreementTests(unittest.TestCase):
         orphans = [name for name in self.present if name not in expected]
         self.assertEqual(orphans, [], "hook directories no event registers: %s" % orphans)
 
-    def test_the_hooks_package_agrees_if_it_names_events_itself(self) -> None:
+    def test_a_hook_layer_event_list_agrees_with_this_one(self) -> None:
+        """Green by construction while the hook layer re-exports, and that is fine.
+
+        The hook layer imports ``EVENTS`` from ``kaios.events``, so today this
+        compares the tuple to itself. Keeping it is deliberate: the attribute
+        resolving does not prove it is a re-export, so the day a literal tuple
+        goes back into ``kaios/hooks/__init__.py`` this is what catches it
+        drifting. The name says agreement, not that a second definition exists.
+        """
         try:
             from kaios import hooks as hooks_mod
         except ImportError:
             self.skipTest("the hooks package does not import")
         theirs = getattr(hooks_mod, "EVENTS", None)
         if theirs is None:
-            self.skipTest("the hooks package does not define its own EVENTS")
+            self.skipTest("the hook layer exposes no EVENTS at all")
         self.assertEqual(
             list(theirs),
             list(events_mod.EVENTS),
