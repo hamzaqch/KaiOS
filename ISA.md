@@ -1,10 +1,10 @@
 ---
 phase: complete
-progress: 39/39
+progress: 40/40
 task: "Build KaiOS: a full harness of the reference class for Copilot in VS Code"
 slug: kaios
 started: 2026-09-28T00:00:00Z
-updated: 2026-09-28T18:00:00Z
+updated: 2026-09-28T18:30:00Z
 stated_goal: "[held verbatim in the private task ISA; it names the reference system, which must not ship in this repo]"
 ---
 
@@ -117,12 +117,14 @@ Why: it is the one domain tool the workplace has; wrappers make it safe and scri
 Why: the principal asked (mid-build) for help building workflows; at work "workflow" means three different things and the builder must handle all of them.
 
 - [x] ISC-39: the `create-workflow` skill plus `workflow_tool.py` interview the user to pick a kind (KaiOS multi-agent workflow, GitHub Actions workflow, Databricks job/bundle workflow), scaffold it (`workflow.json` spec + orchestrator `.agent.md` with handoffs; or `.github/workflows/<name>.yml`; or `resources/<name>.job.yml` bundle resource), validate it (`workflow_tool.py validate <file>` exits 1 on a malformed spec or YAML shape), and track runs in `$KAIOS_HOME/MEMORY/STATE/workflows.json`. Falsifier: scaffold each kind from a fixture answers file and validate; seeded broken spec fails. — evidence: test_workflow 34 OK (c525246)
+- [x] ISC-40: the hook wrapper works from any workspace, not only the KaiOS checkout: with only `KAIOS_REPO` set, or only `%KAIOS_HOME%\lib\kaios` present, a force-push payload from a foreign workspace returns a real `deny` with zero bytes on stderr; with neither, it logs to `hook-errors.log`, still writes zero stderr, and returns continue; `KAIOS_HOOKS_DISABLED=1` short-circuits. Falsifier: `tests/test_foreign_workspace.py`. — evidence: test_foreign_workspace 4 OK; Install.ps1 copies 179 files incl. lib/kaios
 
 ## Anti-claims
 
 - A1: no file in the repo contains a personal name, home path, or the other system's name (ISC-2 is the probe).
 - A2: no hook ever returns a non-JSON body or exits non-zero (ISC-12, 13).
 - A3: no agent or doctrine prose names a model by name (ISC-27).
+- A5: a hook never writes to stderr and never exits non-zero, in any workspace (ISC-40; the first field report was a fail-closed harness denying every command on a stderr line).
 - A4: nothing requires Node, Bun, pip access to PyPI, or admin rights.
 
 ## Test Strategy
@@ -154,12 +156,14 @@ Why: the principal asked (mid-build) for help building workflows; at work "workf
 ## Log
 
 - 2026-09-28: ISA scaffolded; build fan-out begins.
+- 2026-09-28 (field incident, reopened): first use at work reported "pre-tool hook erroring, every command denied". Reproduced here: in a workspace scaffolded by Init-Workspace.ps1 the wrapper ran `python -m kaios.hooks` with no `kaios` on the path, wrote ModuleNotFoundError to stderr, and the harness failed closed. Fix: wrapper resolves the package (KAIOS_REPO → KAIOS_HOME/lib → own repo), sets PYTHONPATH, logs child stderr to a file, adds a kill switch; Install.ps1 copies the package to lib and sets KAIOS_REPO. Regression test added (ISC-40). Lesson: "verified in the checkout" was an example claim; the universal claim is "verified from any workspace".
 - 2026-09-28: six parallel builders (doctrine, core, thinking skills, system skills, agents/installers, workflow) then hooks; each builder cross-audited neighbours' files with independent validators; three stale cross-agent findings were caught by re-verification, which drove the two snapshot commits and datable integrity reports.
 - 2026-09-28: second look elected: none beyond the builders' mutual audits. Reason: every claim has a deterministic probe that passed in one run (`verify.sh`, 39/39), two independent skill validators and two link checkers agreed tree-wide, and the surface is a private work repo, not an authority boundary. Recorded per Algorithm claim 11.
 - 2026-09-28: principal added "workflow builder" mid-run → F8/ISC-39; ⚠️ interpreting "workflow" as all three work meanings (KaiOS agent workflow, GitHub Actions, Databricks job).
 
 ## Remaining Work
 
+- [ ] Confirm on the work machine that the fix clears the denial and capture the exact harness error text for the record.
 - [ ] Run on a real Windows machine: `Install.ps1`, `Probe-Hooks.ps1` and `Test-PS51.ps1` were verified here under PowerShell 7 with 5.1 tokens banned by the parser check, not under a real Windows PowerShell 5.1 host.
 - [ ] Capture the real Copilot stdin schema on first run (`MEMORY/OBSERVABILITY/hook-events.jsonl`) and tighten the hooks' field reads from tolerant `get()` to the observed shape.
 - [ ] Confirm the model names the org enabled in Copilot's picker and run `python -m kaios models set <role> …` then `models apply`; the shipped defaults are placeholders from the registry.

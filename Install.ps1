@@ -136,7 +136,7 @@ function Copy-TreeIfDifferent {
         return
     }
     $root = (Resolve-Path -LiteralPath $Source).Path
-    $files = @(Get-ChildItem -LiteralPath $root -Recurse -File)
+    $files = @(Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.FullName -notmatch '__pycache__' -and $_.Extension -ne '.pyc' })
     if ($files.Count -eq 0) {
         $script:Notes.Add(("skipped {0} — directory is empty" -f $Label))
         return
@@ -342,6 +342,14 @@ foreach ($name in $doctrineDirs) {
 }
 
 # ----------------------------------------------------------------------------
+# Python package copy, so hooks import `kaios` from ANY workspace
+# ----------------------------------------------------------------------------
+
+$packageSource = Join-KaiosPath -Base $repoRoot -Relative 'kaios'
+$packageTarget = Join-KaiosPath -Base $KaiosHome -Relative 'lib/kaios'
+Copy-TreeIfDifferent -Source $packageSource -Destination $packageTarget -Label 'kaios (package)'
+
+# ----------------------------------------------------------------------------
 # User-level hook registry, rendered with absolute paths
 # ----------------------------------------------------------------------------
 
@@ -386,6 +394,9 @@ if (Test-WindowsHost) {
         [Environment]::SetEnvironmentVariable('KAIOS_HOME', $KaiosHome, 'User')
         $envNote = ("set to {0} — open a new terminal to pick it up" -f $KaiosHome)
     }
+    # KAIOS_REPO always points at this checkout so the hook wrapper can find the
+    # package even before the lib copy exists; refreshed on every install.
+    [Environment]::SetEnvironmentVariable('KAIOS_REPO', $repoRoot, 'User')
 }
 
 # ----------------------------------------------------------------------------

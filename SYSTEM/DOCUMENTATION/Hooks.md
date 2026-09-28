@@ -150,3 +150,7 @@ Thirty modules across eight events. Each one carries a docstring stating its rul
 | `scripts/Probe-Hooks.ps1` | the same probe through the PowerShell wrapper, which is the path Windows actually uses |
 
 A hook module is not finished until `probe` is green and its own test exists. A hook with no test is a rule nobody can prove still fires.
+
+## Where the wrapper finds the package
+
+The PowerShell wrapper resolves `import kaios` from, in order: `KAIOS_REPO` (set by `Install.ps1`), `%KAIOS_HOME%\lib` (a package copy `Install.ps1` refreshes on every run), then the repo the wrapper lives in. It sets `PYTHONPATH` for the child process, runs it with that directory as the working directory, and logs any child stderr to `MEMORY/OBSERVABILITY/hook-errors.log` instead of the console, because a harness that sees stderr may fail closed and deny the tool call. `KAIOS_HOOKS_DISABLED=1` is the kill switch.

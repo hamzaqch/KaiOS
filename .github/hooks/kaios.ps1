@@ -36,6 +36,49 @@ $ErrorActionPreference = 'Stop'
 $FallbackJson = '{"continue": true}'
 $ChildTimeoutMs = 18000
 
+function Get-KaiosHome {
+    [CmdletBinding()]
+    param()
+    if ($env:KAIOS_HOME) { return $env:KAIOS_HOME }
+    return (Join-Path $HOME '.kaios')
+}
+
+function Write-HookLog {
+    # Errors never go to the console: a harness that sees stderr may treat the
+    # hook as failed and fail closed. They go to a log file under KAIOS_HOME.
+    [CmdletBinding()]
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return }
+    try {
+        $dir = Join-Path (Get-KaiosHome) 'MEMORY\OBSERVABILITY'
+        if (-not (Test-Path -LiteralPath $dir)) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        }
+        $line = (Get-Date -Format 'o') + ' ' + $Event + ' ' + $Text.Trim()
+        Add-Content -LiteralPath (Join-Path $dir 'hook-errors.log') -Value $line -Encoding UTF8
+    }
+    catch { }
+}
+
+function Resolve-PackageRoot {
+    # Where `import kaios` resolves from, in priority order:
+    #   1. $env:KAIOS_REPO                      (set by Install.ps1)
+    #   2. <KAIOS_HOME>\lib                     (package copy made by Install.ps1)
+    #   3. the repo this wrapper lives in       (the KaiOS checkout itself)
+    [CmdletBinding()]
+    param([string]$RepoRoot)
+    $candidates = @()
+    if ($env:KAIOS_REPO) { $candidates += $env:KAIOS_REPO }
+    $candidates += (Join-Path (Get-KaiosHome) 'lib')
+    if ($RepoRoot) { $candidates += $RepoRoot }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath (Join-Path (Join-Path $candidate 'kaios') '__init__.py')) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
 function Write-HookResult {
     [CmdletBinding()]
     param([string]$Text)
@@ -90,6 +133,11 @@ if (-not $payload) {
     $payload = '{}'
 }
 
+if ($env:KAIOS_HOOKS_DISABLED -eq '1') {
+    Write-HookResult -Text $FallbackJson
+    exit 0
+}
+
 # The event name becomes part of a command line, so accept only a bare
 # identifier. Anything else is treated as an unknown event and short-circuits.
 if ($Event -notmatch '^[A-Za-z][A-Za-z0-9_]*$') {
@@ -109,6 +157,14 @@ try {
 
     $launcher = Resolve-PythonLauncher
     if (-not $launcher) {
+        Write-HookLog -Text 'no python interpreter found on PATH'
+        Write-HookResult -Text $FallbackJson
+        exit 0
+    }
+
+    $packageRoot = Resolve-PackageRoot -RepoRoot $repoRoot
+    if (-not $packageRoot) {
+        Write-HookLog -Text 'kaios package not found: set KAIOS_REPO or re-run Install.ps1'
         Write-HookResult -Text $FallbackJson
         exit 0
     }
@@ -124,7 +180,7 @@ try {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $launcher.Exe
     $psi.Arguments = ($tokens -join ' ')
-    $psi.WorkingDirectory = $repoRoot
+    $psi.WorkingDirectory = $packageRoot
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.RedirectStandardInput = $true
@@ -138,6 +194,13 @@ try {
         # Older hosts may not expose the encoding properties; the default is fine.
     }
     $psi.EnvironmentVariables['PYTHONIOENCODING'] = 'utf-8'
+    $existingPath = $env:PYTHONPATH
+    if ($existingPath) {
+        $psi.EnvironmentVariables['PYTHONPATH'] = $packageRoot + [System.IO.Path]::PathSeparator + $existingPath
+    }
+    else {
+        $psi.EnvironmentVariables['PYTHONPATH'] = $packageRoot
+    }
     $psi.EnvironmentVariables['PYTHONUTF8'] = '1'
     if ($env:KAIOS_HOME) {
         $psi.EnvironmentVariables['KAIOS_HOME'] = $env:KAIOS_HOME
@@ -162,10 +225,10 @@ try {
     $stdout = $outTask.Result
     $stderr = $errTask.Result
 
+    if ($stderr) {
+        Write-HookLog -Text $stderr
+    }
     if ($proc.ExitCode -ne 0) {
-        if ($stderr) {
-            [Console]::Error.Write($stderr)
-        }
         Write-HookResult -Text $FallbackJson
         exit 0
     }
@@ -174,6 +237,7 @@ try {
     exit 0
 }
 catch {
+    Write-HookLog -Text $_.Exception.Message
     Write-HookResult -Text $FallbackJson
     exit 0
 }

@@ -123,6 +123,16 @@ python -m kaios models apply
 
 One rule is structural rather than configurable: a second look is always a different vendor family from whoever built the thing. A model reviewing its own family's output shares its blind spots and argues for its own choices.
 
+## Troubleshooting hooks
+
+Hooks never write to stderr and never exit non-zero; anything that goes wrong is appended to `%KAIOS_HOME%\MEMORY\OBSERVABILITY\hook-errors.log`. Read that file first.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Every command denied, hook shown as erroring | The workspace is not the KaiOS checkout and the `kaios` package could not be imported (first field report) | `git pull` in the KaiOS clone, re-run `Install.ps1` (it copies the package to `%KAIOS_HOME%\lib` and sets `KAIOS_REPO`), open a new VS Code window |
+| Hooks silent, no log lines | Hook files not discovered | Run `Chat: Configure Hooks`, confirm `chat.useHooks` is on and the workspace is trusted |
+| Need hooks off right now | | Set the user environment variable `KAIOS_HOOKS_DISABLED=1` and restart VS Code; every hook then answers `{"continue": true}` |
+
 ## Uninstall
 
 ```
